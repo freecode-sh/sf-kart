@@ -37,6 +37,39 @@ interface Part {
 }
 
 /** Optional modules (bridge, landmarks), loaded if present. */
+/**
+ * Lets the page breathe between build steps (the title keeps animating while the city is built):
+ * a macrotask, so a due frame renders first.
+ */
+const breathe = () => new Promise<void>((r) => setTimeout(r, 0));
+
+/**
+ * Uploads `obj`'s textures to the GPU one per task, so its first frame on screen doesn't upload them
+ * all at once. After compiling it: the programs' uniforms then include the textures the materials'
+ * onBeforeCompile hooks bring in.
+ */
+async function uploadTextures(renderer: THREE.WebGLRenderer, obj: THREE.Object3D): Promise<void> {
+    const textures = new Set<THREE.Texture>();
+    const scan = (v: unknown) => {
+        if (v instanceof THREE.Texture) textures.add(v);
+    };
+    const scanUniforms = (u: Record<string, { value: unknown }> | undefined) => {
+        if (u) for (const x of Object.values(u)) scan(x?.value);
+    };
+    obj.traverse((o) => {
+        const mats = (o as THREE.Mesh).material;
+        for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) {
+            for (const v of Object.values(m)) scan(v);
+            scanUniforms((m as THREE.ShaderMaterial).uniforms);
+            scanUniforms((renderer.properties.get(m) as { uniforms?: Record<string, { value: unknown }> }).uniforms);
+        }
+    });
+    for (const t of textures) {
+        renderer.initTexture(t);
+        await breathe();
+    }
+}
+
 const optional = import.meta.glob(['./bridge.ts', './landmarks.ts']) as Record<string, () => Promise<Record<string, unknown>>>;
 
 export interface SfLights {
@@ -96,12 +129,16 @@ export class SfScene {
         raiseTunnelTops(world, this.meta as unknown as Parameters<typeof raiseTunnelTops>[1]);
         // The carves edit samples pointwise: re-join the cells of different spacing.
         world.stitch();
+        await breathe();
         const ground = buildGroundMaps(world, treeFootprints(world.json, world.crownAt), this.meta.centerline);
+        await breathe();
         // (Not the ground the road hides: none over the jump gaps, which have no road.)
         const gaps = (this.meta.features ?? []).filter((f) => f.type === 'gap' && f.s).map((f) => f.s as [number, number]);
         const buried = buriedUnderRoad(world, this.meta.centerline, (s) => gaps.some(([g0, g1]) => s > g0 - 800 && s < g1 + 800));
         const terrain: TerrainMeshes = buildTerrain(world, ground, buried);
+        await breathe();
         const buildings: BuildingMeshes = buildBuildings(world.json);
+        await breathe();
         const trees: TreeMeshes = buildTrees(world.json, world.crownAt, ground.photoAt, {
             y: world.groundY,
             understory: (x, z) => {
@@ -110,6 +147,7 @@ export class SfScene {
             },
         });
         this.trees = trees;
+        await breathe();
         const streets: StreetMeshes = buildStreets(world);
         const d = world.json.depth;
         this.sky = buildSkyWater(world.json.seaY, d && world.depth ? { ...d, data: world.depth, scale: world.json.scale } : undefined);
@@ -120,6 +158,7 @@ export class SfScene {
             return;
         }
         this.rivals = rivals;
+        await breathe();
         const extras = buildKclExtras(this.kcl, this.meta, onBridge);
         const parkway = buildParkway(this.meta as unknown as Parameters<typeof buildParkway>[0], world, this.kcl, terrain);
         // Dash panels course-wide, except where a section draws its own (the waterfront).
@@ -130,9 +169,12 @@ export class SfScene {
         const fortPoint = buildFortPointSection(this.meta, world);
         this.updaters.push((t) => fortPoint.update(t));
         const waterfront = buildWaterfront(this.meta, world.groundY);
+        await breathe();
         this.parts.push(road, terrain, buildings, buildParkedCars(world, this.meta.centerline), trees, streets, buildVistaGore(world.groundY), this.sky, this.items, extras, parkway, dash, traffic, fortPoint, waterfront);
         if (this.rivals) this.parts.push(this.rivals);
-        for (const p of this.parts) this.group.add(p.group);
+        // Built off screen, then compiled and uploaded before it shows (so the title never stalls).
+        const staging = new THREE.Group();
+        for (const p of this.parts) staging.add(p.group);
 
         // Bridge + landmarks.
         for (const { path, mod: loading } of modules) {
@@ -150,15 +192,19 @@ export class SfScene {
                 if (!obj) continue;
                 const upd = obj.userData.update as ((t: number) => void) | undefined;
                 if (upd) this.updaters.push(upd);
-                this.group.add(obj);
+                staging.add(obj);
+                await breathe();
             } catch (e) {
                 console.warn(`sf: ${path} failed`, e);
             }
         }
         this.light();
         // Every shader now (in parallel where the browser can), not the first time each thing
-        // comes into view mid-race.
-        await this.renderer.compileAsync(this.scene, this.compileCamera);
+        // comes into view mid-race; then the textures, a few at a time.
+        await this.renderer.compileAsync(staging, this.compileCamera, this.scene);
+        await uploadTextures(this.renderer, staging);
+        if (this.disposed) return;
+        this.group.add(...staging.children);
     }
 
     private readonly compileCamera = new THREE.PerspectiveCamera();

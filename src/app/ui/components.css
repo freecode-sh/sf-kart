@@ -383,8 +383,8 @@ button.row.sel .name {
     stroke: var(--chart-land);
 }
 
-/* ---- "by freecode": the mark and the wordmark as freecode.sh sets them (the wordmark a mask in the
-   text colour; the mark's file carries its own padding) ---- */
+/* ---- [GitHub] | "by freecode": the source's link, then freecode's mark and wordmark as freecode.sh
+   sets them (the wordmark a mask in the text colour; the mark's file carries its own padding) ---- */
 .fc-lockup {
     --c: 22px;
     display: inline-flex;
@@ -397,8 +397,34 @@ button.row.sel .name {
     -webkit-backdrop-filter: blur(var(--blur));
     color: var(--ink-muted);
     font: 500 13px/1 var(--font-mono);
-    text-decoration: none;
     white-space: nowrap;
+}
+
+.fc-lockup a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.fc-lockup .gh-mark {
+    width: 18px;
+    height: 18px;
+    background: var(--ink-muted);
+    -webkit-mask: var(--mark) 50% / contain no-repeat;
+    mask: var(--mark) 50% / contain no-repeat;
+}
+
+.fc-lockup .gh-link:hover .gh-mark {
+    background: var(--ink);
+}
+
+.fc-lockup .fc-rule {
+    width: 1px;
+    height: 16px;
+    margin: 0 4px;
+    background: var(--line);
 }
 
 .fc-lockup .fc-mark {
@@ -415,6 +441,6 @@ button.row.sel .name {
     mask: var(--wordmark) 50% / contain no-repeat;
 }
 
-.fc-lockup:hover {
+.fc-lockup .fc-link:hover {
     color: var(--ink);
 }
