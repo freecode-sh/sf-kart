@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { RULES_FILES, rulesId } from '../../src/app/run/rules';
 
 export const DATA_DIR = 'public/data';
 /** Uploaded last, so its presence means a version is complete. */
@@ -34,4 +35,9 @@ export function dataVersion(dir = DATA_DIR): string {
         h.update(createHash('sha256').update(readFileSync(join(dir, f))).digest());
     }
     return h.digest('hex').slice(0, 12);
+}
+
+/** The rules id (src/app/run/rules.ts) of the data in `dir`: the leaderboard season it races in. */
+export function dataRulesId(dir = DATA_DIR): Promise<string> {
+    return rulesId(RULES_FILES.map((f) => new Uint8Array(readFileSync(join(dir, f)))));
 }

@@ -1,0 +1,59 @@
+// The leaderboard API (api/src/index.ts). Deploy with `npx tsx api/deploy.ts [--staging]`, which
+// passes the data version and rules id the game was built with (DATA_VERSION, RULES_ID).
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "sfkart-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "account_id": "4b692596b6483b5386b4d93e3e602a63",
+  "routes": [{ "pattern": "sfkart-api.freecode.sh", "custom_domain": true }],
+  "workers_dev": false,
+  // Verifying a run races it again: about a second of CPU.
+  "limits": { "cpu_ms": 30000 },
+  "observability": { "enabled": true },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "sfkart", "database_id": "42de0f68-3062-4484-aada-8e7aa10b5e30", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    // Run files (inputs), for replays.
+    { "binding": "RUNS", "bucket_name": "sfkart-runs" },
+    // The game's data (tools/uploadData.ts): the verifier's course and vehicles.
+    { "binding": "ASSETS", "bucket_name": "sfkart-assets" }
+  ],
+  "ratelimits": [{ "name": "SUBMIT_LIMIT", "namespace_id": "2001", "simple": { "limit": 6, "period": 60 } }],
+  "vars": {
+    "AUTH_ORIGIN": "https://auth.freecode.sh",
+    "ALLOWED_ORIGINS": "https://freecode.sh,http://localhost:5173",
+    "DATA_PREFIX": "sf-kart",
+    // Kill switches: "false" stops new runs / all writes.
+    "SUBMIT_ENABLED": "true",
+    "WRITES_ENABLED": "true",
+    // Key prefix for run files in RUNS (staging shares the bucket).
+    "RUNS_PREFIX": ""
+  },
+  "env": {
+    "staging": {
+      "name": "sfkart-api-staging",
+      "routes": [],
+      "workers_dev": true,
+      "limits": { "cpu_ms": 30000 },
+      "observability": { "enabled": true },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "sfkart-staging", "database_id": "6d26de79-7955-448d-8e27-77aef37c1a3b", "migrations_dir": "migrations" }
+      ],
+      "r2_buckets": [
+        { "binding": "RUNS", "bucket_name": "sfkart-runs" },
+        { "binding": "ASSETS", "bucket_name": "sfkart-assets" }
+      ],
+      "ratelimits": [{ "name": "SUBMIT_LIMIT", "namespace_id": "2002", "simple": { "limit": 6, "period": 60 } }],
+      "vars": {
+        "AUTH_ORIGIN": "https://auth.freecode.sh",
+        "ALLOWED_ORIGINS": "https://freecode.sh,http://localhost:5173",
+        "DATA_PREFIX": "sf-kart",
+        "SUBMIT_ENABLED": "true",
+        "WRITES_ENABLED": "true",
+        "RUNS_PREFIX": "staging/"
+      }
+    }
+  }
+}

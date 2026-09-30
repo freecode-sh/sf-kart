@@ -12,7 +12,7 @@
 import { writeFileSync } from 'node:fs';
 import { KartObjectManager } from '../../src/game/kart/KartObjectManager';
 import { RaceManager, Stage } from '../../src/game/system/RaceManager';
-import { PickupField, pickupRows } from '../../src/app/sf/itemBoxes';
+import { PickupField, pickupRows } from '../../src/app/sf/pickupField';
 import type { Station } from '../../src/app/sf/road';
 import { vehicleSlot } from '../../src/app/vehicleData';
 import type { VehicleId } from '../../src/app/vehicles';

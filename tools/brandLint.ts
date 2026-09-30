@@ -20,7 +20,7 @@ const BANNED = /mario|nintendo|\bwii\b|game ?cube|\bmkw\b|\bmk ?(8|wii|look|styl
 /** Files that may name the lineage: the credits and the engine's porting notes. */
 const ALLOW = new Set(['CREDITS.md', 'docs/PORTING.md', 'tools/brandLint.ts']);
 
-const ROOTS = ['src/app', 'index.html', 'README.md', 'AGENTS.md', 'docs', 'public', 'tools', 'tests'];
+const ROOTS = ['src/app', 'index.html', 'README.md', 'AGENTS.md', 'docs', 'public', 'tools', 'tests', 'api'];
 const TEXT = /\.(ts|js|mjs|html|css|md|json|txt)$/;
 
 /** Engine identifiers (code files only): enum members, m_ fields, the engine's own API names. */

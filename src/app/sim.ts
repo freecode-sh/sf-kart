@@ -4,14 +4,13 @@
  */
 
 import * as THREE from 'three';
-import { Course } from '../Common';
 import { KartObjectManager } from '../game/kart/KartObjectManager';
 import { DriftState } from '../game/kart/KartMove';
 import type { KartParam } from '../game/kart/KartParam';
 import { eStatus } from '../game/kart/Status';
 import { KartCamera } from '../game/render/KartCamera';
 import { RaceSession, type RaceSessionScenario } from '../game/scene/RaceSession';
-import { KPadHostController, type Trick } from '../game/system/KPadController';
+import { KPadHostController } from '../game/system/KPadController';
 import { RaceManager, Stage } from '../game/system/RaceManager';
 import { ItemDirector } from '../game/item/ItemDirector';
 import type { AudioFrame, SimEvent } from './audio';
@@ -20,12 +19,11 @@ import type { RawPadState } from './input';
 import { BUTTON_ACCELERATE, BUTTON_BRAKE, BUTTON_DRIFT, BUTTON_ITEM, TrickDir } from './input';
 import { EasyDrift } from './easyDrift';
 import { startRace } from './raceStart';
+import { COURSE_SLOT, finishTimeMs, isGoFrame, raceFiles, stepRace, type EngineInput } from './run/race';
 import { DRIVER_SLOT, vehicleSlot } from './vehicleData';
 import type { CameraState, KartVisualState } from './renderer';
 
 const MT_CHARGE_MAX = 270;
-/** The engine's longest start boost (frames); everyone gets it at GO. */
-const START_BOOST_FRAMES = 70;
 /** Countdown frames left when "3" appears. */
 const COUNTDOWN_SHOWN = 181;
 /** Frames of a trick's flourish (the vehicle's own trick animation, see renderer.ts). */
@@ -62,8 +60,8 @@ export class Sim {
     private prevButtons = 0;
     private prev: Snapshot | null = null;
     private cur: Snapshot | null = null;
-    /** Recorded raw inputs of the current run (one entry per frame the controller accepted). */
-    readonly recording: RawPadState[] = [];
+    /** The current run's engine inputs, one per frame stepped (live play only): a run file's body (run/runFile.ts). */
+    readonly recording: EngineInput[] = [];
     /** Events produced by the most recent step() calls; drained by the app. */
     readonly events: SimEvent[] = [];
     private lastPad: RawPadState = { buttons: 0, stickXRaw: 7, stickYRaw: 7, trick: 0 };
@@ -118,9 +116,6 @@ export class Sim {
     /** Laps to finish (the app sets the course's own count before starting). */
     laps = 3;
 
-    /** Course slot the race runs in (generated courses use the engine's default slot, like their ghosts). */
-    private readonly slot = Course.Luigi_Circuit;
-
     constructor(
         private readonly common: Map<string, Uint8Array>,
         private readonly course: Map<string, Uint8Array>,
@@ -144,13 +139,10 @@ export class Sim {
     }
 
     start(): void {
-        const core = new Map<string, Uint8Array>();
-        for (const [k, v] of this.common) core.set(k.startsWith('bsp/') ? `/${k}` : k, v);
-        if (this.kartParam) core.set('kartParam.bin', this.kartParam);
-        const files = { core, course: this.course };
+        const files = raceFiles(this.common, this.course, this.kartParam);
         const scenario: RaceSessionScenario = this.ghost
             ? { type: 'ghost', rkg: this.ghost }
-            : { type: 'local', course: this.slot, character: this.character, vehicle: this.vehicle, driftIsAuto: false };
+            : { type: 'local', course: COURSE_SLOT, character: this.character, vehicle: this.vehicle, driftIsAuto: false };
         RaceManager.lapsToFinish = this.laps;
         startRace(this.session, files, scenario);
         this.drift.reset();
@@ -187,7 +179,6 @@ export class Sim {
             this.updateVisuals();
             return;
         }
-        const host = this.session.hostController();
         // Brake and drift both drive the engine's brake button; the controller layer derives the drift
         // (hop) bit from it being pressed while accelerating. The easy-drift layer decides when it's held.
         const accel = (pad.buttons & BUTTON_ACCELERATE) !== 0;
@@ -196,18 +187,14 @@ export class Sim {
         let brake = (pad.buttons & BUTTON_BRAKE) !== 0 || ((pad.buttons & BUTTON_DRIFT) !== 0 && !this.hopSuppressed);
         brake = this.drift.update(brake, accel, (pad.stickXRaw - 7) / 7, this.driftKart());
         // Start boost: everyone gets one. On the GO frame the engine doesn't see the accelerator (so
-        // no charge-timed boost or burnout of its own) and the best start boost is applied.
-        const rm = RaceManager.Instance()!;
-        const goFrame = rm.stage() === Stage.Countdown && rm.getCountdownTimer() === 1;
-        const buttons = KPadHostController.MakeGhostButtons(accel && !goFrame, brake, (pad.buttons & BUTTON_ITEM) !== 0, this.prevButtons);
+        // no charge-timed boost or burnout of its own) and the best start boost is applied (stepRace).
+        const buttons = KPadHostController.MakeGhostButtons(accel && !isGoFrame(), brake, (pad.buttons & BUTTON_ITEM) !== 0, this.prevButtons);
         this.prevButtons = buttons;
         let trick = this.trickFor(pad);
         if (trick === TrickDir.None) trick = hopTrick;
-        host.setRawInputs(buttons, pad.stickXRaw, pad.stickYRaw, trick as number as Trick);
-        if (host.isAcceptingInputs()) this.recording.push({ ...pad, trick });
-
-        this.session.step();
-        if (goFrame) this.kart().move().applyStartBoost(START_BOOST_FRAMES);
+        const input: EngineInput = { buttons, stickX: pad.stickXRaw, stickY: pad.stickYRaw, trick };
+        this.recording.push(input);
+        stepRace(this.session, input);
         this.lastPad = pad;
         this.prev = this.cur;
         this.cur = this.capture();
@@ -279,7 +266,7 @@ export class Sim {
      * Tricks only ever go out in the air, so a hop press never starts a bike's wheelie.
      *
      * Deterministic: a function of the raw inputs and the kart state. The trick it sends is what
-     * sim.recording stores, and a recorded trick is passed through as is when replayed.
+     * sim.recording stores (the engine input), so a recorded run replays without this layer.
      */
     private hopTrick(pad: RawPadState): TrickDir {
         const held = (pad.buttons & BUTTON_DRIFT) !== 0;

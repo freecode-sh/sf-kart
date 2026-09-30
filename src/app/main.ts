@@ -18,8 +18,12 @@ import { CompareGhosts, loadRun, RunRecorder, saveRun } from './sf/ghosts';
 import { pickupKindFor } from './sf/itemBoxes';
 import { DevTuning } from './devTuning';
 import type { SplitColumn } from './sf/sfHud';
-import { summarize, tuneStats, type StatSummary, type VehicleTune } from './tuning';
-import { engineStats, packKartParam, packVehicleFiles, VEHICLE_DATA_URL, vehicleSlot, type VehicleDataFile } from './vehicleData';
+import { STOCK_TUNE, summarize, tuneStats, type StatSummary, type VehicleTune } from './tuning';
+import { engineStats, packVehicleFiles, VEHICLE_DATA_URL, vehicleSlot, type VehicleDataFile } from './vehicleData';
+import { Leaderboard } from './leaderboard/leaderboard';
+import { RULES } from './leaderboard/api';
+import { finishTimeMs, kartParamFor as packTunedKartParam } from './run/race';
+import { encodeRun } from './run/runFile';
 import { VEHICLES, vehicleDef, type VehicleId } from './vehicles';
 import { DATA_BASE } from './paths';
 
@@ -118,7 +122,7 @@ async function main(): Promise<void> {
         const key = `${id}:${JSON.stringify(tune)}`;
         let b = tunedParams.get(key);
         if (!b) {
-            b = packKartParam(vehicleData, { [id]: tuneStats(vehicleData.vehicles[id].stats, tune) });
+            b = packTunedKartParam(vehicleData, id, tune);
             tunedParams.set(key, b);
         }
         return b;
@@ -216,8 +220,10 @@ async function main(): Promise<void> {
         input.recenterMouse();
     };
 
+    const leaderboard = Leaderboard.enabled() ? new Leaderboard() : null;
     const menu = new Menu(state0, {
         onChange: applySettings,
+        leaderboard: leaderboard ?? undefined,
         bestFor: (v) => {
             const b = bests[bestKey(courseId, v)];
             return b !== undefined ? formatFrames(b) : null;
@@ -272,6 +278,7 @@ async function main(): Promise<void> {
         : null;
 
     window.addEventListener('keydown', (e) => {
+        if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
         if (e.code === 'Enter' && menu.isOpen()) {
             e.preventDefault();
             menu.start();
@@ -377,6 +384,11 @@ async function main(): Promise<void> {
         // (Ghost replays count only when asked to, from the debug hook.)
         const newBest = total > 0 && !liveTuned && (!sim.isReplay() || saveReplays) && (!prevBest || total < prevBest.frames || prevBest.tune !== raceTune);
         if (newBest) saveRun(courseId, run);
+        // The leaderboard: the run itself (its engine inputs up to this frame), if it raced the stock vehicle.
+        const timeMs = finishTimeMs();
+        if (leaderboard && !liveTuned && !sim.isReplay() && timeMs !== null && raceTune.startsWith(`${JSON.stringify(STOCK_TUNE)}|`)) {
+            void leaderboard.finished(vehicle, timeMs, encodeRun({ vehicle, rules: RULES, timeMs, inputs: sim.recording.slice() }));
+        }
         if (total > 0 && !liveTuned && (bests[key] === undefined || total < bests[key]!)) {
             bests[key] = total;
             localStorage.setItem(BEST_KEY, JSON.stringify(bests));
@@ -418,7 +430,7 @@ async function main(): Promise<void> {
         if (!shot || !renderer.sf) return null;
         const t = Math.max(0, simTime - shot.t0);
         if (shot.results && t > RESULTS_SEC) {
-            sfHud?.showResults(shot.results, formatFrames, shot.compare);
+            sfHud?.showResults(shot.results, formatFrames, shot.compare, leaderboard?.status);
             shot.results = null;
         }
         const k = view.kart.pos;

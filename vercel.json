@@ -14,7 +14,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn.freecode.sh; worker-src 'self' blob:; media-src 'self' blob:; connect-src 'self' https://cdn.freecode.sh; frame-ancestors 'self' https://freecode.sh; base-uri 'self'; form-action 'none'"
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn.freecode.sh; worker-src 'self' blob:; media-src 'self' blob:; connect-src 'self' https://cdn.freecode.sh https://sfkart-api.freecode.sh https://auth.freecode.sh; frame-ancestors 'self' https://freecode.sh; base-uri 'self'; form-action 'none'"
         },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }

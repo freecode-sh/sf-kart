@@ -33,6 +33,10 @@ npx tsx tools/brandLint.ts   # no game or brand names in the product (run before
   - Speed-up pickups: `itemBoxes.ts`. Game pieces: `padMaterial.ts`, `kclExtras.ts`.
   - Set pieces: `sections/*`. Landmarks: `landmarks/*`. Bridge: `bridge.ts` and `bridgeParts/`.
   - Rivals: `rivals.ts`. Your own ghosts: `ghosts.ts`.
+- `src/app/run/`: the leaderboard's rules: `race.ts`, the frame code the game and the verifier share;
+  `runFile.ts`, a run as its engine inputs; `verify.ts`, racing one again headless; `rules.ts`, the
+  rules id (season). `src/app/leaderboard/`: the board in the game. `api/`: the leaderboard
+  Worker (`npx tsx api/deploy.ts [--staging]`).
 - `tools/`: offline bakes and bots. `tools/sf/` (data pipeline, rivals, screenshots),
   `tools/course/` (course builder and bot). See tools/README.md.
 - `public/data/`: everything the game loads, all baked (see DATA_LICENSE.md).
@@ -44,6 +48,11 @@ npx tsx tools/brandLint.ts   # no game or brand names in the product (run before
   the hop-button trick mapping, whose output is what gets recorded. After changing the course,
   a vehicle's numbers or gameplay rules, re-record: `npx tsx tools/sf/rivals.ts` and
   `npx tsx tools/sf/pickupBot.ts`.
+- **Leaderboard rules:** anything that decides a race goes through `src/app/run/race.ts`, so
+  `verify.ts` races a posted run exactly as it was played (`tests/run.test.ts`). If that code or the
+  engine changes the outcome of a race, bump `RULES_VERSION` in `rules.ts`, which starts a new
+  season. `tests/rules.test.ts` fails whenever those files change. Deploy the API
+  (`npx tsx api/deploy.ts`) before the game.
 - **Course budget:** the collision (KCL) must stay under 65,535 normals.
 - **No copied IP:** no names, art, sounds or files from commercial games, and no real vehicle
   brands or logos. `tools/brandLint.ts` checks the product. Keep the credits files accurate.

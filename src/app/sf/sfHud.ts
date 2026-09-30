@@ -216,7 +216,8 @@ export class SfHud {
     }
 
     /** Results board at the finish: rows sorted by time (frames), the player's highlighted. */
-    showResults(rows: { name: string; color: string; frames: number; you?: boolean }[], fmt: (f: number) => string, compare: SplitColumn[] = []): void {
+    /** `extra`: shown under the places (the leaderboard's line). */
+    showResults(rows: { name: string; color: string; frames: number; you?: boolean }[], fmt: (f: number) => string, compare: SplitColumn[] = [], extra?: HTMLElement): void {
         const sorted = [...rows].sort((a, b) => a.frames - b.frames);
         const table = this.splitTable(compare);
         this.results.classList.toggle('wide', !!table);
@@ -231,6 +232,7 @@ export class SfHud {
             `</div>` +
             (table ? `<div class="sf-res-cmp"><div class="sf-res-sub">VEHICLES · SECTION SPLITS (s)</div>${table}</div>` : '') +
             `<div class="sf-res-hint"><kbd>Enter</kbd> race again · <kbd>C</kbd> next vehicle · <kbd>Esc</kbd> menu</div>`;
+        if (extra) this.results.querySelector('.sf-res-main')!.append(extra);
         this.results.classList.add('show');
     }
 

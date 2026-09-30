@@ -200,6 +200,8 @@ export class InputManager {
 
     constructor(private readonly target: HTMLElement) {
         window.addEventListener('keydown', (e) => {
+            // Typing in a text field (the leaderboard's name) isn't driving.
+            if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
             if (this.isBound(e.code) || e.code === 'Space') e.preventDefault();
             if (!this.down.has(e.code)) {
                 this.pressedThisFrame.add(e.code);

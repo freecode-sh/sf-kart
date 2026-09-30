@@ -69,7 +69,8 @@ Only use data you're allowed to redistribute, and credit it: see [DATA_LICENSE.m
 ## Share it
 
 Deploy the static build anywhere: `npm run build` produces `dist/`. Set `SFK_BASE=/` to serve from a
-domain root. Tag your remix with **#sfkart** and **@freecode_sh**.
+domain root. The leaderboard is freecode's and stays off in your build. To run your own, deploy
+`api/` to your Cloudflare account and build with `SFK_API` set to it. Tag your remix with **#sfkart** and **@freecode_sh**.
 
 ## Rules of the road
 

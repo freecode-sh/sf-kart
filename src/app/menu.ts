@@ -32,6 +32,8 @@ export function effectiveTune(s: MenuState, id: VehicleId): VehicleTune {
 export interface MenuCallbacks {
     onStart(state: MenuState): void;
     onChange(state: MenuState): void;
+    /** The leaderboard's menu panel (kept across renders) and its refresh when the menu opens. */
+    leaderboard?: { panel: HTMLElement; open(): void };
     bestFor(vehicle: VehicleId): string | null;
     /** The vehicle's race stats with `tune`. */
     statsFor(vehicle: VehicleId, tune: VehicleTune): StatSummary;
@@ -94,6 +96,7 @@ export class Menu {
 
     open(): void {
         this.visible = true;
+        this.cb.leaderboard?.open();
         this.render();
         this.el.classList.add('open');
     }
@@ -147,6 +150,7 @@ export class Menu {
         <div class="menu-row">
           <label><input type="checkbox" data-opt="ghosts" ${s.ghosts ? 'checked' : ''}/> Compare ghosts <small>(race translucent ghosts of your best run in each vehicle; the results compare section splits)</small></label>
         </div>
+        ${this.cb.leaderboard ? '<div data-leaderboard></div>' : ''}
         ${DEV_TOOLS ? this.tuningPanel() : ''}
 
         <div class="menu-row">
@@ -201,6 +205,7 @@ export class Menu {
         </div>
       </div>`;
 
+        if (this.cb.leaderboard) this.el.querySelector('[data-leaderboard]')?.replaceWith(this.cb.leaderboard.panel);
         this.el.querySelectorAll<HTMLElement>('[data-vehicle]').forEach((b) =>
             b.addEventListener('click', () => this.set('vehicle', b.dataset.vehicle as VehicleId)),
         );

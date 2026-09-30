@@ -14,7 +14,7 @@ import { COURSE_SLOT, loadCourseFiles, loadMeta, runBot, summarize } from '../co
 import { buildRKG } from '../ghost/rkg';
 import { DRIVER_SLOT, vehicleSlot } from '../../src/app/vehicleData';
 import { vehicleDef } from '../../src/app/vehicles';
-import { PickupField, pickupRows } from '../../src/app/sf/itemBoxes';
+import { PickupField, pickupRows } from '../../src/app/sf/pickupField';
 import type { Station } from '../../src/app/sf/road';
 import { KartObjectManager } from '../../src/game/kart/KartObjectManager';
 import { RaceManager, Stage } from '../../src/game/system/RaceManager';

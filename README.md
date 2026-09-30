@@ -63,6 +63,10 @@ switches to the next vehicle (and restarts), `B` toggles the street detail.
   slipstream.
 - **Ghosts:** your best run in each vehicle races along as a translucent ghost (*Compare ghosts* in
   the menu), and the results board compares your section splits with each vehicle's best.
+- **Leaderboard** (on freecode.sh): sign in with a freecode account and pick a board name. A run
+  that beats your board time is posted as the run itself (its inputs, a few KB). The server races
+  it again with the game's own code and puts it on the board only if it finishes in the time you
+  got. There's a board for all vehicles and one for each vehicle.
 
 ### Developer tools
 
@@ -173,11 +177,36 @@ build fails until it's there):
 npx tsx tools/uploadData.ts   # needs wrangler, logged in to freecode's Cloudflare account
 ```
 
+### Leaderboard
+
+The leaderboard is a Cloudflare Worker, `api/`, at `sfkart-api.freecode.sh`:
+- D1 holds players, runs and bests.
+- R2 `sfkart-runs` holds the run files.
+- Players are freecode accounts, checked against freecode's auth server's public keys.
+- The game shows the leaderboard only when it's built with `SFK_API=https://sfkart-api.freecode.sh`
+  (set in the Vercel project).
+
+A run is posted as its engine inputs, in a run file (`src/app/run/runFile.ts`). The API races it
+again (`src/app/run/verify.ts`) through the same frame code the game uses (`src/app/run/race.ts`),
+so a posted time is the time those inputs make. Each board is a season: a rules id that hashes
+`RULES_VERSION` and the course and vehicle data (`src/app/run/rules.ts`). Change the rules and a
+new board starts.
+
+```sh
+npx tsx api/deploy.ts --staging   # sfkart-api-staging.freecode.workers.dev, its own D1
+npx tsx api/deploy.ts             # production: data upload, D1 migrations, then the Worker
+```
+
+Deploy the API before the game whenever the rules change. Until then, the API refuses the new
+game's runs as stale.
+
 ## Layout
 
 - `src/egg`, `src/game`, `src/abstract`, `src/Common.ts`: the physics engine (Kinoko port; mirrors
   its source tree, see `docs/PORTING.md`).
 - `src/app`: the browser app (three.js renderer, input, audio, HUD, menu); `src/app/sf`: San Francisco.
+- `src/app/run`: races as run files, and their verification; `src/app/leaderboard`: the board in the game.
+- `api/`: the leaderboard API (Cloudflare Worker, D1 migrations).
 - `tools/`: course builder, bot, San Francisco data bakes.
 - `tests/`: unit tests (`npm test`), including the math core pinned to Kinoko's C++ output.
 - `public/data/`: everything the game loads, baked by `tools/` (see [DATA_LICENSE.md](DATA_LICENSE.md)).

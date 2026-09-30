@@ -5,7 +5,7 @@
  * version is skipped. The manifest goes last: the build checks for it.
  *
  * Usage: npx tsx tools/uploadData.ts [--cdn https://cdn.freecode.sh/sf-kart] [--bucket sfkart-assets]
- *        (needs Cloudflare's wrangler CLI, logged in; the key prefix is the CDN URL's path)
+ *        (needs `npx wrangler login` to the bucket's account; the key prefix is the CDN URL's path)
  */
 
 import { execFileSync } from 'node:child_process';
@@ -40,12 +40,12 @@ if ((await fetch(`${base}/${MANIFEST}`, { method: 'HEAD' })).ok) {
 
 const files = dataFiles();
 const put = (key: string, file: string, type: string) =>
-    execFileSync('wrangler', ['r2', 'object', 'put', `${bucket}/${key}`, '--remote', '--file', file, '--content-type', type, '--cache-control', IMMUTABLE], { stdio: ['ignore', 'ignore', 'inherit'] });
+    execFileSync('npx', ['wrangler', 'r2', 'object', 'put', `${bucket}/${key}`, '--remote', '--file', file, '--content-type', type, '--cache-control', IMMUTABLE], { stdio: ['ignore', 'ignore', 'inherit'] });
 
 for (const [i, f] of files.entries()) {
     console.log(`[${i + 1}/${files.length}] ${f}`);
     put(`${prefix}/${f}`, join(DATA_DIR, f), TYPES[f.split('.').pop()!] ?? 'application/octet-stream');
 }
 const manifest = JSON.stringify({ version, files: Object.fromEntries(files.map((f) => [f, statSync(join(DATA_DIR, f)).size])) }, null, 1);
-execFileSync('wrangler', ['r2', 'object', 'put', `${bucket}/${prefix}/${MANIFEST}`, '--remote', '--pipe', '--content-type', TYPES.json!, '--cache-control', 'no-cache'], { input: manifest, stdio: ['pipe', 'ignore', 'inherit'] });
+execFileSync('npx', ['wrangler', 'r2', 'object', 'put', `${bucket}/${prefix}/${MANIFEST}`, '--remote', '--pipe', '--content-type', TYPES.json!, '--cache-control', 'no-cache'], { input: manifest, stdio: ['pipe', 'ignore', 'inherit'] });
 console.log(`${base}: ${files.length} files uploaded`);

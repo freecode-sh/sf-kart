@@ -484,6 +484,26 @@ body {
     background: #ffcf3a22;
 }
 
+/* ---- Leaderboard (src/app/leaderboard/leaderboard.ts): the menu's board and the results line ---- */
+.lb-tabs { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 8px; }
+.lb-rows { list-style: none; margin: 0; padding: 0; max-width: 520px; }
+.lb-row, .lb-empty { display: flex; align-items: center; gap: 12px; padding: 4px 10px; border-radius: 8px; }
+.lb-empty { opacity: 0.6; }
+.lb-row:nth-child(odd) { background: #ffffff08; }
+.lb-row b { width: 24px; font-style: italic; }
+.lb-row i { width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 0 1px #0006; }
+.lb-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-row em { font-style: normal; font-variant-numeric: tabular-nums; opacity: 0.9; }
+.lb-row.you { background: #ffcf3a22; box-shadow: inset 0 0 0 2px #ffcf3a; }
+.lb-you { margin-top: 10px; display: flex; gap: 22px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+.lb-you a.pill { color: #fff; text-decoration: none; }
+.lb-name { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.lb-name input { font: inherit; color: #fff; background: #ffffff14; border: 2px solid #ffffff33; border-radius: 8px; padding: 3px 8px; width: 12em; }
+.lb-msg.error { color: #ff9a8a; }
+.lb-msg.busy { opacity: 0.8; }
+.sf-hud .lb-status { pointer-events: auto; margin-top: 10px; font-size: 15px; }
+.sf-hud .lb-status .lb-you { margin-top: 0; justify-content: center; text-align: center; }
+
 /* ---- San Francisco course HUD (src/app/sf/sfHud.ts) ---- */
 .sf-hud .sf-map {
     position: absolute;
