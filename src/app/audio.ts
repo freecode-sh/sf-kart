@@ -24,7 +24,8 @@ export type SimEvent =
     | { type: 'respawn' }
     | { type: 'lap'; lap: number; final: boolean }
     | { type: 'finish' }
-    | { type: 'itemBox' };
+    /** A speed-up pickup collected: stored, or the stock was full. */
+    | { type: 'itemBox'; stored: boolean };
 
 export interface AudioFrame {
     speed: number;

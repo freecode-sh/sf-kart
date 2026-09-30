@@ -10,11 +10,8 @@ import { DEV_TOOLS } from '../devMode';
 import type { VehicleId } from '../vehicles';
 
 declare const __SFK_API__: string;
-declare const __SFK_RULES__: string;
 
 export const API = typeof __SFK_API__ === 'string' ? __SFK_API__ : '';
-/** The rules id this build races under (src/app/run/rules.ts). */
-export const RULES = typeof __SFK_RULES__ === 'string' ? __SFK_RULES__ : '';
 
 export type BoardId = 'all' | VehicleId;
 

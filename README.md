@@ -26,7 +26,8 @@ npm run dev          # http://localhost:5173
 
 ## Playing
 
-Pick a vehicle and a control scheme in the menu (settings are saved), then race.
+Press Enter on the title, pick a vehicle (the Robo Car is the easy one to start with), pick your
+controls, and race from the times to beat once San Francisco has loaded. Your choices are saved.
 
 | | WASD | WASD + Mouse | Arrows |
 |---|---|---|---|
@@ -45,19 +46,20 @@ In a race: `Esc` opens the menu, `Backspace` restarts (`Enter` from the results)
 switches to the next vehicle (and restarts), `B` toggles the street detail.
 
 - **Vehicles:** the **Share E-Bike** (a silver bike-share e-bike: inside drifts, mini-turbos,
-  wheelies), the **Robotaxi** (heavy car: top speed, wide stable slides, super mini-turbos, nobody at
-  the wheel) and the **Tour Buggy** (heavy car: quicker off the line, tighter, lower top speed).
+  wheelies), the **Robo Car** (heavy car: top speed, wide stable slides, super mini-turbos, nobody at
+  the wheel) and the **Tour Kart** (heavy car: quicker off the line, tighter, lower top speed).
 - **Drifting:** hold drift and steer (even after the hop) to slide; sparks go white → blue
   (mini-turbo) → orange (super mini-turbo, cars); let go to boost. Without the button it never
   drifts, so plain steering takes the corners too.
 - **Jumps and tricks:** press hop as you leave a ramp (or on the ramp,
   just before the lip) for a trick, steer for a side trick, and land it for a boost. Each vehicle
   has its own tricks (flips and spins for the cars, a superman or a no-hander on the e-bike).
-- **Speed-ups:** drive through the pickups for an instant boost: batteries for the Robotaxi, gas
-  cans for the Tour Buggy, coffee for the E-Bike. You also start with three to use yourself.
+- **Speed-ups:** you start with three to use yourself, and each pickup you drive through adds one
+  back (up to three): batteries for the Robo Car, gas cans for the Tour Kart, coffee for the
+  E-Bike.
 - **Start:** a quick 3, 2, 1, and everyone gets the best start boost at GO.
 - **Race:** a time trial against five recorded rivals across the three vehicles (Karl the Fog on a
-  Robotaxi, Sutro and Lombard on e-bikes, Muni and Coit on Tour Buggies; about 2:41 to 3:07), with
+  Robo Car, Sutro and Lombard on e-bikes, Muni and Coit on Tour Karts; about 2:43 to 3:07), with
   live race position, minimap, section banners, a results board with section splits and a
   procedural surf-rock soundtrack. The rivals are playbacks of bot runs: no collisions, no
   slipstream.
@@ -121,6 +123,7 @@ npx tsx tools/sf/bakeWorld.ts                    # terrain cells, land cover, bu
 npx tsx tools/sf/bakeImagery.ts                  # NOAA 0.25 m imagery: 1 m base + 0.3 m detail along the road, NDVI
 npx tsx tools/sf/bakeWorld.ts                    # again, to pick up the imagery (roof colours, trees use the NDVI)
 npx tsx tools/sf/bakeStreetDetail.ts             # crosswalks, curbs, sidewalks, bike lanes, meters → detail.json
+npx tsx tools/sf/bakeChart.ts                    # the menus' course chart (lap, land, coast, streets) → chart.json; then sh tools/brand/icons.sh
 npx tsx tools/sf/rivals.ts                       # CPU rivals → public/data/courses/golden_gate/rivals.{bin,json}
 npx tsx tools/sf/pickupBot.ts                    # the bot ghost with the pickups → bot.rkg
 npx tsx tools/course/botlap.ts golden_gate --laps 1   # bot lap report; --vehicle robotaxi|buggy for the cars
@@ -199,6 +202,17 @@ npx tsx api/deploy.ts             # production: data upload, D1 migrations, then
 
 Deploy the API before the game whenever the rules change. Until then, the API refuses the new
 game's runs as stale.
+
+The data isn't served as it is in `public/data/`: the build writes a deploy copy to `dist-data/`
+(`tools/lib/dataBuild.ts`), each file named by its content hash (cached for good) and gzipped where
+that pays off (the game unpacks it). Without `SFK_DATA_BASE` it goes into `dist/data/`, next to the
+app. freecode.sh loads it from its CDN instead (a Cloudflare R2 bucket):
+
+```sh
+npx tsx tools/uploadData.ts                  # what would be uploaded (files the CDN doesn't have yet)
+npx tsx tools/uploadData.ts --apply          # upload them (wrangler, logged in)
+SFK_DATA_BASE=https://cdn.freecode.sh/sf-kart npm run build   # an app that loads from there
+```
 
 ## Layout
 

@@ -5,7 +5,7 @@
  */
 
 import * as THREE from 'three';
-import { DATA_BASE } from '../paths';
+import { loadData, loadDataImage, loadDataJson } from '../data';
 
 export interface GridInfo {
     e0: number;
@@ -97,19 +97,17 @@ export class SfWorld {
         }
     }
 
-    static async load(root = `${DATA_BASE}/sf`): Promise<SfWorld> {
-        const bytes = async (f: string) => {
-            const r = await fetch(`${root}/${f}`);
-            if (!r.ok) throw new Error(`${root}/${f}: ${r.status}`);
-            return r.arrayBuffer();
-        };
-        const json = (await (await fetch(`${root}/world.json`)).json()) as WorldJson;
+    static async load(root = 'sf'): Promise<SfWorld> {
+        const bytes = (f: string) => loadData(`${root}/${f}`);
+        const json = await loadDataJson<WorldJson>(`${root}/world.json`);
         const loader = new THREE.TextureLoader();
-        const tex = (f: string, flipY = true) =>
-            new Promise<THREE.Texture>((res, rej) =>
+        const tex = async (f: string, flipY = true) => {
+            const url = await loadDataImage(`${root}/${f}`);
+            return new Promise<THREE.Texture>((res, rej) =>
                 loader.load(
-                    `${root}/${f}`,
+                    url,
                     (t) => {
+                        URL.revokeObjectURL(url);
                         t.colorSpace = THREE.SRGBColorSpace;
                         t.anisotropy = 8;
                         t.flipY = flipY;
@@ -117,9 +115,13 @@ export class SfWorld {
                         res(t);
                     },
                     undefined,
-                    rej,
+                    (e) => {
+                        URL.revokeObjectURL(url);
+                        rej(e);
+                    },
                 ),
             );
+        };
         const b = json.imagery.base;
         const imgs: Promise<THREE.Texture>[] = [];
         for (let j = 0; j < b.n; ++j) for (let i = 0; i < b.n; ++i) imgs.push(tex(b.pattern.replace('{i}', String(i)).replace('{j}', String(j))));

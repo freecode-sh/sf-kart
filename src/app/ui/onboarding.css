@@ -1,0 +1,259 @@
+/* The way into a race (ui/onboarding.ts): the fog card over the live city. Tokens only. */
+
+body.onboarding #hud {
+    display: none;
+}
+
+.onboard {
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    font: 400 var(--text-body) / 1.45 var(--font-body);
+    /* Until the city is in, the fog is all there is. */
+    background: var(--ground);
+    transition: background 720ms;
+}
+
+.onboard.ready {
+    background: transparent;
+}
+
+.fog-bank {
+    position: absolute;
+    inset: 0;
+    background: var(--fog-floor), var(--fog-bank);
+    pointer-events: none;
+}
+
+/* The title's camera cuts from shot to shot behind a passing bank of fog (main.ts sets --veil). */
+.veil {
+    position: absolute;
+    inset: 0;
+    background: var(--ground);
+    opacity: var(--veil, 0);
+    pointer-events: none;
+}
+
+.onboard .card {
+    animation: card-in var(--dur-slow) var(--ease-out);
+}
+
+@keyframes card-in {
+    from {
+        opacity: 0.6;
+        transform: translateX(-6px);
+    }
+}
+
+.onboard > .fc-lockup {
+    position: absolute;
+    right: 32px;
+    bottom: 28px;
+}
+
+/* ---- Title: the chart fills the card; the name sits in the bay east of the bridge ---- */
+.card.title {
+    padding: 0;
+    background: rgb(243 245 246 / 0.2);
+    /* The map is see-through: the city stays in view behind it, barely softened. */
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+/* The launch post (ui/launchPost.ts), right of the scene, above the lockup. */
+.launch-post {
+    position: absolute;
+    right: 32px;
+    bottom: 84px;
+    width: 320px;
+    max-height: calc(100% - 132px);
+    overflow: hidden;
+    border-radius: 14px;
+}
+
+.launch-post .twitter-tweet {
+    margin: 0 !important;
+}
+
+/* Before X's widget draws it: the link, on fog. */
+.launch-post blockquote {
+    margin: 0;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--fog);
+    font-size: 13px;
+}
+
+.card.title .chart {
+    position: absolute;
+    inset: 0;
+}
+
+.card.title .bay {
+    position: absolute;
+    left: 118px;
+    top: 44px;
+}
+
+.card.title .card-foot {
+    position: absolute;
+    left: 28px;
+    right: 28px;
+    bottom: 28px;
+}
+
+.card.title .go {
+    flex: 1;
+}
+
+/* ---- Your ride: one wide card around a 16:9 stage (sf/showroom.ts), centred ---- */
+.onboard[data-screen='vehicle'] > .fc-lockup {
+    display: none;
+}
+
+.card.vehicle {
+    left: 0;
+    right: 0;
+    margin: auto;
+    /* As wide as fits, the stage 16:9 and the rows under it within the window's height. */
+    width: min(1440px, calc(100vw - 48px), calc((100vh - 48px - 176px) * 16 / 9 + 48px));
+    height: fit-content;
+    padding: 20px 24px 22px;
+}
+
+.ride-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.stage {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    border-radius: 16px;
+    overflow: hidden;
+    /* The studio's fog: lighter overhead, a floor that fades into it. */
+    background:
+        radial-gradient(120% 70% at 50% 30%, #fbfcfc, transparent 70%),
+        linear-gradient(180deg, #eef1f3 0%, #e4e8eb 62%, #dde2e6 100%);
+    box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.stage-view {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.stage-arrow {
+    position: absolute;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    margin-top: -22px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--fog);
+    box-shadow: 0 4px 14px rgb(30 40 50 / 0.14);
+    cursor: pointer;
+}
+
+.stage-arrow.prev {
+    left: 14px;
+}
+
+.stage-arrow.next {
+    right: 14px;
+}
+
+/* A chevron, drawn (no glyph). */
+.stage-arrow::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    border: solid var(--ink);
+    border-width: 2.5px 2.5px 0 0;
+    transform: translate(-65%, -50%) rotate(45deg);
+}
+
+.stage-arrow.prev::before {
+    transform: translate(-35%, -50%) rotate(-135deg);
+}
+
+.stage-arrow:hover {
+    background: var(--fog-solid);
+}
+
+.ride-info {
+    display: grid;
+    grid-template-columns: auto minmax(200px, 320px) auto;
+    justify-content: space-between;
+    align-items: center;
+    gap: 28px;
+    margin-top: 18px;
+}
+
+.ride-info h2 {
+    margin: 0;
+    white-space: nowrap;
+}
+
+.ride-info .stats {
+    margin: 0;
+    grid-template-columns: 86px 1fr;
+    gap: 7px 12px;
+}
+
+.ride-info .card-foot {
+    margin: 0;
+    padding: 0;
+    gap: 22px;
+}
+
+/* ---- Controls ---- */
+.card.controls .segments {
+    margin-top: 4px;
+}
+
+/* The title's map is see-through: thin the fog behind it. */
+.onboard[data-screen='title'] .fog-bank {
+    opacity: 0.45;
+}
+
+/* A narrow card (small windows): the stats drop under the name and the buttons. */
+.card.vehicle {
+    container-type: inline-size;
+}
+
+@media (max-height: 640px) {
+    .card.vehicle {
+        width: min(1440px, calc(100vw - 48px), calc((100vh - 48px - 290px) * 16 / 9 + 48px));
+    }
+}
+
+@container (max-width: 760px) {
+    .ride-info {
+        grid-template-columns: 1fr auto;
+        row-gap: 14px;
+    }
+
+    .ride-info .stats {
+        grid-column: 1 / -1;
+        order: 3;
+    }
+}
+
+@container (max-width: 560px) {
+    .ride-info {
+        grid-template-columns: 1fr;
+    }
+
+    .ride-info .card-foot {
+        order: 4;
+    }
+}

@@ -1,51 +1,63 @@
 /**
- * Uploads the game's data (public/data) to a Cloudflare R2 bucket behind a CDN, at
- * `<prefix>/<data version>/data/`, for a build with `SFK_CDN` (see vite.config.ts). Files are
- * immutable (the version is a hash of all of them), so they cache forever; an already uploaded
- * version is skipped. The manifest goes last: the build checks for it.
+ * Uploads the deploy copy of the game's data (tools/lib/dataBuild.ts, rebuilt into dist-data/ first)
+ * to the R2 bucket behind the CDN, for a build made with `SFK_DATA_BASE=<cdn>/<prefix>`. The names
+ * are content hashes, so a file the CDN already has (a HEAD answers 200) is never uploaded again, and
+ * everything is cached for a year, immutable. Upload before deploying the app that points at it.
  *
- * Usage: npx tsx tools/uploadData.ts [--cdn https://cdn.freecode.sh/sf-kart] [--bucket sfkart-assets]
- *        (needs `npx wrangler login` to the bucket's account; the key prefix is the CDN URL's path)
+ * Usage: npx tsx tools/uploadData.ts [--apply] [--bucket sfkart-assets] [--prefix sf-kart] [--cdn https://cdn.freecode.sh]
+ * Without --apply it's a dry run: it lists what it would upload. Uploads with wrangler (logged in).
  */
 
-import { execFileSync } from 'node:child_process';
-import { statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { DATA_DIR, dataFiles, dataVersion, MANIFEST } from './lib/dataVersion';
+import { buildData, contentType } from './lib/dataBuild';
 
-const args = process.argv.slice(2);
-const opt = (k: string) => {
-    const i = args.indexOf(k);
-    return i >= 0 ? args[i + 1] : undefined;
+const argv = process.argv.slice(2);
+const opt = (k: string, d: string) => {
+    const i = argv.indexOf(`--${k}`);
+    return i >= 0 && argv[i + 1] ? argv[i + 1]! : d;
 };
-const cdn = (opt('--cdn') ?? process.env.SFK_CDN ?? 'https://cdn.freecode.sh/sf-kart').replace(/\/+$/, '');
-const bucket = opt('--bucket') ?? 'sfkart-assets';
+const apply = argv.includes('--apply');
+const bucket = opt('bucket', 'sfkart-assets');
+const prefix = opt('prefix', 'sf-kart').replace(/^\/+|\/+$/g, '');
+const cdn = opt('cdn', 'https://cdn.freecode.sh').replace(/\/+$/, '');
+const OUT = 'dist-data';
+const CACHE = 'public, max-age=31536000, immutable';
 
-const TYPES: Record<string, string> = {
-    json: 'application/json',
-    webp: 'image/webp',
-    jpg: 'image/jpeg',
-    png: 'image/png',
-};
-const IMMUTABLE = 'public, max-age=31536000, immutable';
+const manifest = buildData('public/data', OUT);
+const kb = (n: number) => `${(n / 1024).toFixed(0)} KB`;
 
-const version = dataVersion();
-const prefix = `${new URL(cdn).pathname.replace(/^\/+/, '')}/${version}/data`;
-const base = `${cdn}/${version}/data`;
+/** Whether the CDN already serves `file` (a 404 or a network error: no). */
+async function present(file: string): Promise<boolean> {
+    try {
+        return (await fetch(`${cdn}/${prefix}/${file}`, { method: 'HEAD' })).ok;
+    } catch {
+        return false;
+    }
+}
 
-if ((await fetch(`${base}/${MANIFEST}`, { method: 'HEAD' })).ok) {
-    console.log(`${base}: already uploaded`);
+const todo: string[] = [];
+let bytes = 0;
+const entries = Object.entries(manifest);
+const have = await Promise.all(entries.map(([, e]) => present(e.file)));
+for (const [k, [path, e]] of entries.entries()) {
+    console.log(`${have[k] ? 'have  ' : 'upload'} ${e.file.padEnd(52)} ${kb(e.stored).padStart(8)}${e.gz ? ` (${kb(e.size)} raw)` : ''}  ← ${path}`);
+    if (have[k]) continue;
+    todo.push(e.file);
+    bytes += e.stored;
+}
+console.log(`${todo.length} of ${Object.keys(manifest).length} files to upload (${kb(bytes)}) to r2://${bucket}/${prefix}/ (${cdn}/${prefix}/)`);
+if (!apply) {
+    if (todo.length) console.log('Dry run: --apply uploads them.');
     process.exit(0);
 }
-
-const files = dataFiles();
-const put = (key: string, file: string, type: string) =>
-    execFileSync('npx', ['wrangler', 'r2', 'object', 'put', `${bucket}/${key}`, '--remote', '--file', file, '--content-type', type, '--cache-control', IMMUTABLE], { stdio: ['ignore', 'ignore', 'inherit'] });
-
-for (const [i, f] of files.entries()) {
-    console.log(`[${i + 1}/${files.length}] ${f}`);
-    put(`${prefix}/${f}`, join(DATA_DIR, f), TYPES[f.split('.').pop()!] ?? 'application/octet-stream');
+for (const file of todo) {
+    const args = ['r2', 'object', 'put', `${bucket}/${prefix}/${file}`, '--remote', '--file', join(OUT, file), '--content-type', contentType(file), '--cache-control', CACHE];
+    console.log(`wrangler ${args.join(' ')}`);
+    const r = spawnSync('wrangler', args, { stdio: 'inherit' });
+    if (r.status !== 0) {
+        console.error(`upload failed: ${file}`);
+        process.exit(1);
+    }
 }
-const manifest = JSON.stringify({ version, files: Object.fromEntries(files.map((f) => [f, statSync(join(DATA_DIR, f)).size])) }, null, 1);
-execFileSync('npx', ['wrangler', 'r2', 'object', 'put', `${bucket}/${prefix}/${MANIFEST}`, '--remote', '--pipe', '--content-type', TYPES.json!, '--cache-control', 'no-cache'], { input: manifest, stdio: ['pipe', 'ignore', 'inherit'] });
-console.log(`${base}: ${files.length} files uploaded`);
+console.log('Done.');

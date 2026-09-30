@@ -1,13 +1,15 @@
 /**
- * The leaderboard in the game: a board in the menu (tabs: all vehicles, then each) and a line on
- * the results board that posts the run just finished. A run is posted when it beats your time on
- * the board; signed out (or without a board name yet), the best such run is kept (localStorage)
- * and posted once you're signed in and named. Player names only ever go in as text.
+ * The online leaderboard in the game: its top times go to the welcome screen's board
+ * (ui/leaderboard.ts, via `onRows`), and a line on the results board posts the run just finished.
+ * A run is posted when it beats your time on the board; signed out (or without a board name yet),
+ * the best such run is kept (localStorage) and posted once you're signed in and named. Player
+ * names only ever go in as text.
  */
 
+import { RULES_HASH as RULES } from 'virtual:sfkart-rules-hash';
 import { signInUrl } from '../brand';
-import { VEHICLES, vehicleDef, type VehicleId } from '../vehicles';
-import { API, ApiError, formatMs, getBoard, getMe, postRun, RULES, setName, type BoardId, type BoardRow, type Me } from './api';
+import { vehicleDef, type VehicleId } from '../vehicles';
+import { API, ApiError, formatMs, getBoard, getMe, postRun, setName, type BoardRow, type Me } from './api';
 
 const PENDING_KEY = 'sfkart.pendingRun';
 
@@ -21,13 +23,11 @@ interface Pending {
 
 type Status = { kind: 'idle' } | { kind: 'busy'; text: string } | { kind: 'done'; text: string } | { kind: 'error'; text: string };
 
-export class Leaderboard {
-    /** The menu's board. */
-    readonly panel = el('section', 'lb');
+export class OnlineBoard {
     /** The results board's line. */
     readonly status = el('div', 'lb-status');
-    private tab: BoardId = 'all';
-    private rows: BoardRow[] | null = null;
+    /** The top times (all vehicles), whenever they're fetched. */
+    onRows: (rows: BoardRow[], me: Me | null) => void = () => {};
     /** undefined: not asked yet; null: signed out. */
     private me: Me | null | undefined;
     private state: Status = { kind: 'idle' };
@@ -41,7 +41,7 @@ export class Leaderboard {
         void this.refresh().then(() => this.postPending());
     }
 
-    /** The menu opened: fresh board and account. */
+    /** Fresh board and account (the welcome screen shows). */
     open(): void {
         void this.refresh();
     }
@@ -99,9 +99,8 @@ export class Leaderboard {
     }
 
     private async refresh(): Promise<void> {
-        const tab = this.tab;
-        const [rows] = await Promise.all([getBoard(tab).catch(() => null), this.loadMe()]);
-        if (tab === this.tab) this.rows = rows;
+        const [rows] = await Promise.all([getBoard('all').catch(() => null), this.loadMe()]);
+        if (rows) this.onRows(rows, this.me ?? null);
         this.render();
     }
 
@@ -111,43 +110,15 @@ export class Leaderboard {
     }
 
     private render(): void {
-        this.renderPanel();
         this.renderStatus();
     }
 
-    private renderPanel(): void {
-        const p = this.panel;
-        p.replaceChildren(el('div', 'menu-section', 'Leaderboard ', el('small', '', 'verified times: every run is raced again on the server')));
-        const tabs = el('div', 'lb-tabs');
-        for (const id of ['all', ...VEHICLES.map((v) => v.id)] as BoardId[]) {
-            const b = el('button', `pill${id === this.tab ? ' sel' : ''}`, id === 'all' ? 'All vehicles' : vehicleDef(id).name);
-            b.addEventListener('click', () => {
-                this.tab = id;
-                this.rows = null;
-                void this.refresh();
-            });
-            tabs.append(b);
-        }
-        p.append(tabs);
-        const list = el('ol', 'lb-rows');
-        if (this.rows === null) list.append(el('li', 'lb-empty', 'Loading…'));
-        else if (!this.rows.length) list.append(el('li', 'lb-empty', 'No times yet: be the first.'));
-        for (const r of (this.rows ?? []).slice(0, 10)) {
-            const dot = el('i');
-            dot.style.background = vehicleDef(r.vehicle).color;
-            const row = el('li', `lb-row${this.me?.name && r.name === this.me.name ? ' you' : ''}`, el('b', '', String(r.rank)), dot, el('span', '', r.name), el('em', '', formatMs(r.timeMs)));
-            row.title = vehicleDef(r.vehicle).name;
-            list.append(row);
-        }
-        p.append(list, this.youLine(true));
-    }
-
     private renderStatus(): void {
-        this.status.replaceChildren(this.youLine(false));
+        this.status.replaceChildren(this.youLine());
     }
 
     /** Your part: sign in, pick a name, the post in progress / its result, your bests. */
-    private youLine(panel: boolean): HTMLElement {
+    private youLine(): HTMLElement {
         const line = el('div', 'lb-you');
         const pending = loadPending();
         const pendingText = pending && pending.rules === RULES ? `${formatMs(pending.timeMs)} on the ${vehicleDef(pending.vehicle).name}` : null;
@@ -182,15 +153,14 @@ export class Leaderboard {
             if (this.state.kind === 'error') line.append(el('div', 'lb-msg error', this.state.text));
             return line;
         }
-        if (this.state.kind !== 'idle' && (!panel || this.state.kind !== 'done')) line.append(el('div', `lb-msg ${this.state.kind}`, this.state.text));
-        if (panel && this.me?.name) {
-            const best = this.me.bests.all;
+        if (this.state.kind !== 'idle') line.append(el('div', `lb-msg ${this.state.kind}`, this.state.text));
+        if (this.me?.name && this.state.kind !== 'busy') {
             const edit = el('button', 'pill', 'Change name');
             edit.addEventListener('click', () => {
                 this.editing = true;
                 this.render();
             });
-            line.append(el('span', '', `You: ${this.me.name}${best ? ` · best ${formatMs(best.timeMs)} (#${best.rank})` : ' · no board time yet'} `), edit);
+            line.append(el('span', '', `Posting as ${this.me.name} `), edit);
         }
         return line;
     }

@@ -1,5 +1,5 @@
 /**
- * The Robotaxi: a white electric crossover with a roof sensor dome (its lidar spins with speed and
+ * The Robo Car: a white electric crossover with a roof sensor dome (its lidar spins with speed and
  * faster on boost), sensor pods on the fenders and corners, and nobody in the driver's seat. The
  * steering wheel turns by itself; a passenger rides in the back. Hazards blink while it slides, the
  * tail lights brighten on the brakes. Tricks: the lidar pops up on its mast and spins flat out, the

@@ -5,9 +5,9 @@
    "color": "#d9dee6",
    "accent": "#6b7a8f",
    "vehicle": "robotaxi",
-   "frames": 10076,
+   "frames": 10198,
    "stride": 2,
-   "finishFrame": 10048,
+   "finishFrame": 10170,
    "offset": 0
   },
   {
@@ -15,40 +15,40 @@
    "color": "#e53935",
    "accent": "#fafafa",
    "vehicle": "ebike",
-   "frames": 10348,
+   "frames": 10330,
    "stride": 2,
-   "finishFrame": 10320,
-   "offset": 120912
+   "finishFrame": 10302,
+   "offset": 122376
   },
   {
    "name": "Muni",
    "color": "#2e86de",
    "accent": "#f39c12",
    "vehicle": "buggy",
-   "frames": 10857,
+   "frames": 10880,
    "stride": 2,
-   "finishFrame": 10828,
-   "offset": 245088
+   "finishFrame": 10851,
+   "offset": 246336
   },
   {
    "name": "Lombard",
    "color": "#8e44ad",
    "accent": "#f1c40f",
    "vehicle": "ebike",
-   "frames": 11226,
+   "frames": 11213,
    "stride": 2,
-   "finishFrame": 11198,
-   "offset": 375384
+   "finishFrame": 11185,
+   "offset": 376896
   },
   {
    "name": "Coit",
    "color": "#27ae60",
    "accent": "#ecf0f1",
    "vehicle": "buggy",
-   "frames": 11623,
+   "frames": 11676,
    "stride": 2,
-   "finishFrame": 11595,
-   "offset": 510096
+   "finishFrame": 11648,
+   "offset": 511464
   }
  ]
 }

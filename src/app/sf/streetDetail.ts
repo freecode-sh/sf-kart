@@ -8,7 +8,7 @@
  */
 
 import * as THREE from 'three';
-import { DATA_BASE } from '../paths';
+import { loadDataJson } from '../data';
 import { chunkMesh } from './chunks';
 import { nearCourse } from './courseNear';
 
@@ -38,10 +38,8 @@ export interface StreetDetailPart {
     dispose(): void;
 }
 
-export async function loadStreetDetail(root = `${DATA_BASE}/sf`): Promise<StreetDetailJson> {
-    const r = await fetch(`${root}/detail.json`);
-    if (!r.ok) throw new Error(`${root}/detail.json: ${r.status}`);
-    return (await r.json()) as StreetDetailJson;
+export function loadStreetDetail(root = 'sf'): Promise<StreetDetailJson> {
+    return loadDataJson<StreetDetailJson>(`${root}/detail.json`);
 }
 
 /** Sizes (world units, 60 per meter) and colors. */

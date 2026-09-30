@@ -4,6 +4,10 @@
  * speedometer in mph (1 m = 60 units, 59.94 frames/s), the race position and the results board.
  */
 
+import { DEV_TOOLS } from '../devMode';
+import { chartData, type ChartData } from '../ui/chart';
+import { el, kbd, setChildren } from '../ui/dom';
+
 export interface SfHudMeta {
     centerline: { s: number; pos: [number, number, number] }[];
     segments: Record<string, [number, number]>;
@@ -56,22 +60,23 @@ export class SfHud {
         parent: HTMLElement,
         private readonly meta: SfHudMeta,
     ) {
-        this.root = document.createElement('div');
-        this.root.className = 'sf-hud';
-        this.root.innerHTML = `
-          <canvas class="sf-map" width="440" height="440"></canvas>
-          <div class="sf-banner"></div>
-          <div class="sf-progress"><div></div></div>
-          <div class="sf-mph">0<small> mph</small></div>
-          <div class="sf-pos"></div>
-          <div class="sf-results"></div>`;
+        this.map = el('canvas', { class: 'sf-map', width: 440, height: 440 });
+        this.banner = el('div', { class: 'sf-banner' });
+        this.bar = el('div');
+        this.mph = el('span', null, '0');
+        this.pos = el('div', { class: 'sf-pos' });
+        this.results = el('div', { class: 'sf-results card', role: 'dialog', 'aria-label': 'Results' });
+        this.root = el(
+            'div',
+            { class: 'sf-hud' },
+            this.map,
+            this.banner,
+            el('div', { class: 'sf-progress' }, this.bar),
+            el('div', { class: 'sf-mph' }, this.mph, el('small', null, ' mph')),
+            this.pos,
+            this.results,
+        );
         parent.appendChild(this.root);
-        this.map = this.root.querySelector('.sf-map') as HTMLCanvasElement;
-        this.banner = this.root.querySelector('.sf-banner') as HTMLElement;
-        this.mph = this.root.querySelector('.sf-mph') as HTMLElement;
-        this.bar = this.root.querySelector('.sf-progress > div') as HTMLElement;
-        this.pos = this.root.querySelector('.sf-pos') as HTMLElement;
-        this.results = this.root.querySelector('.sf-results') as HTMLElement;
         // Projection: fit the centerline into the canvas, north up (-z up).
         let x0 = Infinity;
         let x1 = -Infinity;
@@ -91,7 +96,26 @@ export class SfHud {
         this.toProj = (x, z) => [ox + (x - x0) * k, oz + (z - z0) * k];
         this.bg = document.createElement('canvas');
         this.bg.width = this.bg.height = W;
+        this.drawMap(null);
+        void chartData().then((d) => d && this.drawMap(d));
+    }
+
+    /** The minimap's still layer: the land (once the chart is in), the lap and the start. */
+    private drawMap(chart: ChartData | null): void {
+        const meta = this.meta;
+        const W = this.bg.width;
         const g = this.bg.getContext('2d')!;
+        g.clearRect(0, 0, W, W);
+        if (chart) {
+            // Chart units are world / 60: the projection of (60 c).
+            const o0 = this.toProj(0, 0);
+            const o1 = this.toProj(60, 60);
+            g.save();
+            g.setTransform(o1[0] - o0[0], 0, 0, o1[1] - o0[1], o0[0], o0[1]);
+            g.fillStyle = 'rgba(246, 246, 243, 0.72)';
+            g.fill(new Path2D(chart.land));
+            g.restore();
+        }
         const path = () => {
             g.beginPath();
             meta.centerline.forEach((c, i) => {
@@ -101,40 +125,26 @@ export class SfHud {
             });
             g.closePath();
         };
+        // The lap in International Orange (the UI's --signature), as on the title's chart.
         g.lineJoin = g.lineCap = 'round';
         path();
-        g.strokeStyle = 'rgba(0,0,0,0.55)';
-        g.lineWidth = 16;
+        g.strokeStyle = '#f5f5f2';
+        g.lineWidth = 15;
         g.stroke();
         path();
-        g.strokeStyle = '#f4f1ea';
-        g.lineWidth = 9;
+        g.strokeStyle = '#fe6a00';
+        g.lineWidth = 8;
         g.stroke();
-        // The bridge in International Orange.
-        for (const name of ['bridge_nb', 'bridge_sb']) {
-            const r = meta.segments[name];
-            if (!r) continue;
-            g.beginPath();
-            let first = true;
-            for (const c of meta.centerline) {
-                if (c.s < r[0] || c.s > r[1]) continue;
-                const [px, py] = this.toProj(c.pos[0], c.pos[2]);
-                if (first) g.moveTo(px, py);
-                else g.lineTo(px, py);
-                first = false;
-            }
-            g.strokeStyle = '#e8492e';
-            g.lineWidth = 9;
-            g.stroke();
-        }
-        // Start line.
+        // The start.
         const st = meta.centerline.reduce((a, c) => (Math.abs(c.s - (meta.start?.s ?? 0)) < Math.abs(a.s - (meta.start?.s ?? 0)) ? c : a));
         const [sx, sy] = this.toProj(st.pos[0], st.pos[2]);
-        g.fillStyle = '#111';
-        g.fillRect(sx - 9, sy - 9, 18, 18);
-        g.fillStyle = '#fff';
-        g.fillRect(sx - 9, sy - 9, 9, 9);
-        g.fillRect(sx, sy, 9, 9);
+        g.beginPath();
+        g.arc(sx, sy, 9, 0, Math.PI * 2);
+        g.fillStyle = '#121417';
+        g.fill();
+        g.lineWidth = 4;
+        g.strokeStyle = '#f5f5f2';
+        g.stroke();
     }
 
     /** Section title at spline S. */
@@ -154,7 +164,7 @@ export class SfHud {
                 void this.banner.offsetWidth;
                 this.banner.classList.add('show');
                 clearTimeout(this.bannerTimer);
-                this.bannerTimer = window.setTimeout(() => this.banner.classList.remove('show'), 2600);
+                this.bannerTimer = window.setTimeout(() => this.banner.classList.remove('show'), 2640);
             }
         }
         const g = this.map.getContext('2d')!;
@@ -167,7 +177,7 @@ export class SfHud {
             g.fillStyle = r.color;
             g.fill();
             g.lineWidth = 3;
-            g.strokeStyle = '#fff';
+            g.strokeStyle = '#f5f5f2';
             g.stroke();
         }
         const [kx, ky] = this.toProj(st.kart.x, st.kart.z);
@@ -181,10 +191,10 @@ export class SfHud {
         g.lineTo(0, 6);
         g.lineTo(-12, 12);
         g.closePath();
-        g.fillStyle = '#ffcc00';
+        g.fillStyle = '#121417';
         g.fill();
-        g.lineWidth = 3;
-        g.strokeStyle = '#1b1b1b';
+        g.lineWidth = 4;
+        g.strokeStyle = '#f5f5f2';
         g.stroke();
         g.restore();
         // (Only when they change: unchanged writes still cost the page a layout pass every frame.)
@@ -193,7 +203,7 @@ export class SfHud {
         const mph = Math.round(Math.abs(st.speed) * MPH_PER_UF);
         if (mph !== this.shownMph) {
             this.shownMph = mph;
-            this.mph.innerHTML = `${mph}<small> mph</small>`;
+            this.mph.textContent = String(mph);
         }
     }
 
@@ -205,8 +215,7 @@ export class SfHud {
         }
         this.pos.style.display = '';
         if (p !== this.lastPos) {
-            const suf = p === 1 ? 'st' : p === 2 ? 'nd' : p === 3 ? 'rd' : 'th';
-            this.pos.innerHTML = `${p}<sup>${suf}</sup><small>/${of}</small>`;
+            setChildren(this.pos, p, el('sup', null, ordinal(p)), el('small', null, `/${of}`));
             this.pos.className = `sf-pos p${Math.min(p, 4)}`;
             this.pos.classList.remove('bump');
             void this.pos.offsetWidth;
@@ -215,30 +224,51 @@ export class SfHud {
         }
     }
 
-    /** Results board at the finish: rows sorted by time (frames), the player's highlighted. */
-    /** `extra`: shown under the places (the leaderboard's line). */
+    /** The results card at the finish: your place and time, the standings, and what the keys do. */
+    /** `extra`: shown under the places (the online leaderboard's line). */
     showResults(rows: { name: string; color: string; frames: number; you?: boolean }[], fmt: (f: number) => string, compare: SplitColumn[] = [], extra?: HTMLElement): void {
         const sorted = [...rows].sort((a, b) => a.frames - b.frames);
-        const table = this.splitTable(compare);
-        this.results.classList.toggle('wide', !!table);
-        this.results.innerHTML =
-            `<div class="sf-res-main"><div class="sf-res-title">RESULTS</div>` +
-            sorted
-                .map(
-                    (r, i) =>
-                        `<div class="sf-res-row${r.you ? ' you' : ''}" style="animation-delay:${0.15 + i * 0.12}s"><b>${i + 1}</b><i style="background:${r.color}"></i><span>${r.name}</span><em>${fmt(r.frames)}</em></div>`,
-                )
-                .join('') +
-            `</div>` +
-            (table ? `<div class="sf-res-cmp"><div class="sf-res-sub">VEHICLES · SECTION SPLITS (s)</div>${table}</div>` : '') +
-            `<div class="sf-res-hint"><kbd>Enter</kbd> race again · <kbd>C</kbd> next vehicle · <kbd>Esc</kbd> menu</div>`;
-        if (extra) this.results.querySelector('.sf-res-main')!.append(extra);
+        const place = sorted.findIndex((r) => r.you) + 1;
+        const you = sorted[place - 1];
+        // (The vehicle comparison's section splits: dev tools only.)
+        const table = DEV_TOOLS ? this.splitTable(compare) : null;
+        setChildren(
+            this.results,
+            el('div', { class: 'label' }, 'Finish'),
+            place ? el('h2', null, place, el('sup', null, ordinal(place)), el('small', null, ` / ${sorted.length}`)) : null,
+            you ? el('div', { class: 'sf-res-time' }, fmt(you.frames)) : null,
+            el(
+                'ol',
+                { class: 'board' },
+                ...sorted.map((r, i) =>
+                    el(
+                        'li',
+                        { class: `row${r.you ? ' you' : ''}`, style: { animationDelay: `${120 + i * 60}ms` } },
+                        el('span', { class: 'place' }, i + 1),
+                        el('span', { class: 'name' }, r.name),
+                        el('span', { class: 'time' }, fmt(r.frames)),
+                    ),
+                ),
+            ),
+            extra ?? null,
+            table,
+            el(
+                'div',
+                { class: 'card-foot sf-res-keys' },
+                el('span', null, kbd('Enter'), ' Race again'),
+                el('span', null, kbd('C'), ' Next ride'),
+                el('span', null, kbd('Esc'), ' Menu'),
+            ),
+        );
         this.results.classList.add('show');
     }
 
-    /** Seconds per section for each run; the fastest in each row is marked. */
-    private splitTable(cols: SplitColumn[]): string {
-        if (cols.length < 2) return '';
+    /**
+     * Seconds per section for each run: the fastest in each row is marked (teal), and this run's
+     * time where it's slower than that (red).
+     */
+    private splitTable(cols: SplitColumn[]): HTMLTableElement | null {
+        if (cols.length < 2) return null;
         const secs = Object.entries(this.meta.segments).sort((a, b) => a[1][0] - b[1][0]).map(([k]) => k);
         // Stretches driven twice (the bridge both ways) get numbered.
         const seen = new Map<string, number>();
@@ -252,13 +282,27 @@ export class SfHud {
         const row = (label: string, vals: (number | undefined)[]) => {
             const known = vals.filter((v): v is number => v !== undefined);
             const best = known.length ? Math.min(...known) : -1;
-            return `<tr><td>${label}</td>${vals.map((v) => `<td class="${v === best && known.length > 1 ? 'best' : ''}">${sec(v)}</td>`).join('')}</tr>`;
+            return el(
+                'tr',
+                null,
+                el('td', null, label),
+                ...vals.map((v, i) => {
+                    const mark = known.length < 2 || v === undefined ? '' : v === best ? 'best' : cols[i]!.current ? 'slower' : '';
+                    return el('td', { class: mark }, sec(v));
+                }),
+            );
         };
-        return (
-            `<table class="sf-splits"><tr><th></th>${cols.map((c) => `<th class="${c.current ? 'cur' : ''}"><i style="background:${c.color}"></i>${c.name}${c.note ? `<small>${c.note}</small>` : ''}</th>`).join('')}</tr>` +
-            secs.map((k, i) => row(titles[i]!, cols.map((c) => c.splits[k]))).join('') +
-            row('Total', cols.map((c) => c.total)) +
-            `</table>`
+        return el(
+            'table',
+            { class: 'sf-splits' },
+            el(
+                'tr',
+                null,
+                el('th'),
+                ...cols.map((c) => el('th', { class: c.current ? 'cur' : '' }, el('i', { style: { background: c.color } }), c.name, c.note ? el('small', null, c.note) : null)),
+            ),
+            ...secs.map((k, i) => row(titles[i]!, cols.map((c) => c.splits[k]))),
+            row('Total', cols.map((c) => c.total)),
         );
     }
 
@@ -266,10 +310,15 @@ export class SfHud {
         this.currentTitle = '';
         this.lastPos = 0;
         this.results.classList.remove('show');
-        this.results.innerHTML = '';
+        this.results.replaceChildren();
     }
 
     dispose(): void {
         this.root.remove();
     }
+}
+
+/** "st", "nd", "rd", "th". */
+function ordinal(p: number): string {
+    return p % 100 >= 11 && p % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][p % 10] ?? 'th');
 }

@@ -1,21 +1,23 @@
 /**
  * Speed-up pickups: rows of floating pickups across the road at fixed points of the lap. Driving
- * through one gives an instant speed-up (the engine's item boost, applied by main.ts);
- * the pickup bursts and comes back ~4 s later. App-side gameplay layered on the engine. The rivals
- * collected them in their recorded runs (tools/sf/rivals.ts); on screen only the player's burst.
+ * through one stores a speed-up for the item button (up to three, the HUD's slots; Sim.step adds
+ * it); the pickup bursts and comes back ~4 s later. App-side gameplay layered on the engine. The
+ * rivals collected and used them in their recorded runs (tools/sf/rivals.ts); on screen only the
+ * player's burst.
  *
  * The look follows the vehicle being raced (setKind):
- *   battery  (Robotaxi)    a chunky green cell with a glowing lightning bolt, a charge glow sweeping
+ *   battery  (Robo Car)    a chunky green cell with a glowing lightning bolt, a charge glow sweeping
  *                          up it; bursts into electric sparks.
- *   gas      (Tour Buggy)  a red-orange jerry can (X-pressed sides, triple handle, spout); bursts into
+ *   gas      (Tour Kart)   a red-orange jerry can (X-pressed sides, triple handle, spout); bursts into
  *                          a whoosh of fiery puffs.
  *   coffee   (E-Bike)      a takeaway cup with a kraft sleeve and lid, steam wisps curling off it;
  *                          bursts into steam, the lid popping off.
  * Each hovers low over a soft contact shadow, bobs gently and spins about the vertical, and glows
  * a little so it pops in the golden-hour light.
  *
- * The gameplay part (layout, pickup test, respawn) is `PickupField` in pickupField.ts, shared with
- * the bots and the leaderboard's run verifier.
+ * The gameplay part (layout, pickup test, respawn) is `PickupField` in rules/pickups.ts: the sim
+ * collects the pickups and stores the speed-ups itself (Sim.step). This draws them, following its own
+ * copy of the field (the same layout and rule after the same frames, so the same pickups burst).
  */
 
 import * as THREE from 'three';
@@ -23,8 +25,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { PIECE_COLORS } from './padMaterial';
 import type { Station } from './road';
-import { HOVER, PickupField } from './pickupField';
 import type { VehicleId } from '../vehicles';
+import { HOVER, PickupField } from '../rules/pickups';
 
 export type PickupKind = 'battery' | 'gas' | 'coffee';
 
@@ -84,7 +86,7 @@ function boltGeometry(h: number, d: number): THREE.BufferGeometry {
 
 const GREEN = PIECE_COLORS.boostGreen;
 
-/** Robotaxi: an upright battery cell, Boost Green, with a white bolt on each side. */
+/** Robo Car: an upright battery cell, Boost Green, with a white bolt on each side. */
 function batteryModel(): THREE.BufferGeometry {
     const R = 62;
     const H = 190;
@@ -108,7 +110,7 @@ function batteryModel(): THREE.BufferGeometry {
     return model(parts);
 }
 
-/** Tour Buggy: a red-orange jerry can. */
+/** Tour Kart: a red-orange jerry can. */
 function gasModel(): THREE.BufferGeometry {
     const W = 150;
     const H = 180;

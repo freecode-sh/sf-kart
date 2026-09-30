@@ -7,6 +7,7 @@
 
 import { STOCK_TUNE, TUNE_KNOBS, type StatSummary, type TuneKey, type VehicleTune } from './tuning';
 import { VEHICLES, vehicleDef, type VehicleId } from './vehicles';
+import { button, el, kbd, setChildren, type Child } from './ui/dom';
 
 export interface DevTuningHost {
     vehicle(): VehicleId;
@@ -52,10 +53,15 @@ export class DevTuning {
         return x.toPrecision(4);
     }
 
-    private knobText(key: TuneKey, v: number): string {
-        if (key === 'miniTurbo') return `${v >= 0 ? '+' : ''}${v}f`;
+    private knobText(key: TuneKey, v: number): Child[] {
+        if (key === 'miniTurbo') return [`${v >= 0 ? '+' : ''}${v}f`];
         const pct = (v - 1) * 100;
-        return `×${v.toFixed(3)} <small>${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</small>`;
+        return [`×${v.toFixed(3)} `, el('small', null, `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`)];
+    }
+
+    /** Stock → now for a stat (just the value when unchanged). */
+    private statText(key: TuneKey, a: number, b: number): Child[] {
+        return a === b ? [this.fmtStat(key, b)] : [`${this.fmtStat(key, a)} → `, el('b', null, this.fmtStat(key, b))];
     }
 
     private render(): void {
@@ -65,54 +71,97 @@ export class DevTuning {
         const stock = this.host.statsFor(id, STOCK_TUNE);
         const now = this.host.statsFor(id, t);
         const knobs = TUNE_KNOBS.filter((k) => !(k.kartOnly && def.kind === 'bike'));
-        this.el.innerHTML = `
-          <div class="dt-head"><b>Dev tuning</b> <small>live · <kbd>K</kbd> closes</small></div>
-          <div class="dt-vehicles">${VEHICLES.map((v) => `<button class="${v.id === id ? 'sel' : ''}" data-v="${v.id}">${v.short}</button>`).join('')}</div>
-          <div class="dt-note">Switching vehicle restarts; the sliders apply instantly.</div>
-          <table>${knobs
-              .map((k) => {
-                  const a = stock[k.key];
-                  const b = now[k.key];
-                  return `<tr title="${k.help}">
-                    <td>${k.label}</td>
-                    <td><input type="range" min="${k.min}" max="${k.max}" step="${k.step}" value="${t[k.key]}" data-k="${k.key}"/></td>
-                    <td class="dt-val" data-val="${k.key}">${this.knobText(k.key, t[k.key])}</td>
-                    <td class="dt-stat" data-stat="${k.key}">${a === b ? this.fmtStat(k.key, b) : `${this.fmtStat(k.key, a)} → <b>${this.fmtStat(k.key, b)}</b>`}</td>
-                  </tr>`;
-              })
-              .join('')}</table>
-          <div class="dt-actions"><button data-reset>Reset ${def.short} to defaults</button><button data-stock>All stock</button><button data-copy>Copy</button></div>
-          <pre class="dt-json">${this.host.tuneJson()}</pre>`;
-
-        this.el.querySelectorAll<HTMLButtonElement>('[data-v]').forEach((b) =>
-            b.addEventListener('click', () => {
-                this.host.switchVehicle(b.dataset.v as VehicleId);
-                b.blur();
-            }),
-        );
-        this.el.querySelectorAll<HTMLInputElement>('input[data-k]').forEach((inp) => {
-            const key = inp.dataset.k as TuneKey;
-            inp.addEventListener('input', () => {
-                const cur = this.host.tune(id);
-                this.host.setTune(id, { ...cur, [key]: Number(inp.value) });
-                this.update(id);
+        const knobRow = (k: (typeof TUNE_KNOBS)[number]) => {
+            const input = el('input', {
+                type: 'range',
+                min: k.min,
+                max: k.max,
+                step: k.step,
+                value: t[k.key],
+                on: {
+                    input: () => {
+                        const cur = this.host.tune(id);
+                        this.host.setTune(id, { ...cur, [k.key]: Number(input.value) });
+                        this.update(id);
+                    },
+                    // Hand the keyboard back to the game (arrow keys would move a focused slider).
+                    change: () => input.blur(),
+                    pointerup: () => input.blur(),
+                },
             });
-            // Hand the keyboard back to the game (arrow keys would move a focused slider).
-            inp.addEventListener('change', () => inp.blur());
-            inp.addEventListener('pointerup', () => inp.blur());
-        });
-        this.el.querySelector('[data-reset]')!.addEventListener('click', () => {
-            this.host.setTune(id, undefined);
-            this.render();
-        });
-        this.el.querySelector('[data-stock]')!.addEventListener('click', () => {
-            this.host.setTune(id, { ...STOCK_TUNE });
-            this.render();
-        });
-        this.el.querySelector('[data-copy]')!.addEventListener('click', (e) => {
-            void navigator.clipboard?.writeText(this.host.tuneJson());
-            (e.currentTarget as HTMLButtonElement).textContent = 'Copied';
-        });
+            return el(
+                'tr',
+                { title: k.help },
+                el('td', null, k.label),
+                el('td', null, input),
+                el('td', { class: 'dt-val', data: { val: k.key } }, ...this.knobText(k.key, t[k.key])),
+                el('td', { class: 'dt-stat', data: { stat: k.key } }, ...this.statText(k.key, stock[k.key], now[k.key])),
+            );
+        };
+        const copy = button(
+            {
+                on: {
+                    click: () => {
+                        void navigator.clipboard?.writeText(this.host.tuneJson());
+                        copy.textContent = 'Copied';
+                    },
+                },
+            },
+            'Copy',
+        );
+        setChildren(
+            this.el,
+            el('div', { class: 'dt-head' }, el('b', null, 'Dev tuning'), ' ', el('small', null, 'live · ', kbd('K'), ' closes')),
+            el(
+                'div',
+                { class: 'dt-vehicles' },
+                ...VEHICLES.map((v) => {
+                    const b = button(
+                        {
+                            class: v.id === id ? 'sel' : '',
+                            on: {
+                                click: () => {
+                                    this.host.switchVehicle(v.id);
+                                    b.blur();
+                                },
+                            },
+                        },
+                        v.short,
+                    );
+                    return b;
+                }),
+            ),
+            el('div', { class: 'dt-note' }, 'Switching vehicle restarts; the sliders apply instantly.'),
+            el('table', null, ...knobs.map(knobRow)),
+            el(
+                'div',
+                { class: 'dt-actions' },
+                button(
+                    {
+                        on: {
+                            click: () => {
+                                this.host.setTune(id, undefined);
+                                this.render();
+                            },
+                        },
+                    },
+                    `Reset ${def.short} to defaults`,
+                ),
+                button(
+                    {
+                        on: {
+                            click: () => {
+                                this.host.setTune(id, { ...STOCK_TUNE });
+                                this.render();
+                            },
+                        },
+                    },
+                    'All stock',
+                ),
+                copy,
+            ),
+            el('pre', { class: 'dt-json' }, this.host.tuneJson()),
+        );
     }
 
     /** Updates the numbers after a slider moved (without rebuilding the sliders). */
@@ -122,11 +171,9 @@ export class DevTuning {
         const now = this.host.statsFor(id, t);
         for (const k of TUNE_KNOBS) {
             const v = this.el.querySelector(`[data-val="${k.key}"]`);
-            if (v) v.innerHTML = this.knobText(k.key, t[k.key]);
+            if (v) setChildren(v, ...this.knobText(k.key, t[k.key]));
             const s = this.el.querySelector(`[data-stat="${k.key}"]`);
-            const a = stock[k.key];
-            const b = now[k.key];
-            if (s) s.innerHTML = a === b ? this.fmtStat(k.key, b) : `${this.fmtStat(k.key, a)} → <b>${this.fmtStat(k.key, b)}</b>`;
+            if (s) setChildren(s, ...this.statText(k.key, stock[k.key], now[k.key]));
         }
         const json = this.el.querySelector('.dt-json');
         if (json) json.textContent = this.host.tuneJson();

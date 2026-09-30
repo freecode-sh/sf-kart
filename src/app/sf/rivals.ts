@@ -9,8 +9,9 @@ import * as THREE from 'three';
 import type { VehicleId } from '../vehicles';
 import { DEFAULT_LIVERY, type VehicleModel } from './vehicleModel';
 import { buildVehicleModel } from './vehicleModels';
+import { loadData, loadDataJson } from '../data';
 
-interface RivalInfo {
+export interface RivalInfo {
     name: string;
     color: string;
     accent: string;
@@ -34,7 +35,8 @@ interface Rival {
     lateral: number;
 }
 
-const RACE_START = 412;
+/** The frame the race starts on (GO), which the rivals' finish frames count from. */
+export const RACE_START = 412;
 
 export function nameTag(name: string, color: string): THREE.Sprite {
     const cv = document.createElement('canvas');
@@ -74,7 +76,7 @@ export class Rivals {
 
     static async load(dir: string): Promise<Rivals | null> {
         try {
-            const [json, bin] = await Promise.all([fetch(`${dir}/rivals.json`).then((r) => (r.ok ? r.json() : null)), fetch(`${dir}/rivals.bin`).then((r) => (r.ok ? r.arrayBuffer() : null))]);
+            const [json, bin] = await Promise.all([loadDataJson(`${dir}/rivals.json`).catch(() => null), loadData(`${dir}/rivals.bin`).catch(() => null)]);
             if (!json || !bin) return null;
             return new Rivals((json as { rivals: RivalInfo[] }).rivals, bin);
         } catch {

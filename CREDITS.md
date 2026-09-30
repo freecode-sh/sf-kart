@@ -48,4 +48,19 @@ See [DATA_LICENSE.md](DATA_LICENSE.md) for each shipped file's source, licence a
 - [three.js](https://threejs.org) (MIT)
 - [Vite](https://vite.dev) (MIT)
 
+## Fonts
+Latin subsets (`tools/fonts/subset.sh`), shipped with their licences in `src/app/ui/fonts/`.
+
+- [Paper Mono](https://github.com/paper-design/paper-mono) v0.310, © 2025 The Paper Mono Project
+  Authors, SIL Open Font License 1.1 (`src/app/ui/fonts/PaperMono-OFL.txt`)
+- [Public Sans](https://github.com/uswds/public-sans) v2.001, © 2015 The Public Sans Project
+  Authors, SIL Open Font License 1.1 (`src/app/ui/fonts/PublicSans-OFL.txt`)
+- [Archivo](https://github.com/Omnibus-Type/Archivo) v2.001 (italic), © 2020 The Archivo Project
+  Authors, SIL Open Font License 1.1 (`src/app/ui/fonts/Archivo-OFL.txt`)
+
+## freecode
+The freecode mark and wordmark (`src/app/ui/brand/`) are freecode's, as freecode.sh ships them,
+used unaltered for the "by freecode" lockup. They are not covered by this repository's MIT licence:
+a remix that isn't freecode's should drop them.
+
 Built with [freecode](https://freecode.sh).

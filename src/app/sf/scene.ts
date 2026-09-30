@@ -17,7 +17,7 @@ import { buildTerrain, type TerrainMeshes } from './terrain';
 import { buildTrees, treeFootprints, type TreeMeshes } from './trees';
 import { buildGroundMaps } from './groundMaps';
 import { ItemBoxes } from './itemBoxes';
-import { pickupRows } from './pickupField';
+import { pickupRows } from '../rules/pickups';
 import { Rivals } from './rivals';
 import { buildKclExtras } from './kclExtras';
 import { buildFortPointSection } from './sections/fortPoint';
@@ -30,7 +30,6 @@ import { LANDCOVER, SfWorld } from './world';
 import { buildWaterfront, carveWaterfront, waterfrontWalls } from './sections/waterfront';
 import { buriedUnderRoad, carveRoadbed } from './sections/roadbed';
 import { floodPalaceLagoon } from './sections/palaceLagoon';
-import { DATA_BASE } from '../paths';
 
 interface Part {
     group: THREE.Object3D;
@@ -72,7 +71,7 @@ export class SfScene {
 
     private async init(): Promise<void> {
         // (The rivals' recordings and the bridge's and landmarks' code load while the rest is built.)
-        const rivalsLoad = Rivals.load(`${DATA_BASE}/courses/golden_gate`);
+        const rivalsLoad = Rivals.load('courses/golden_gate');
         const modules = Object.entries(optional).map(([path, load]) => ({
             path,
             mod: load().catch((e: unknown) => {

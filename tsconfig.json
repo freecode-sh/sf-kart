@@ -12,7 +12,8 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": false,
     "types": ["node", "vite/client"],
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "tests", "tools", "api/src"]
 }

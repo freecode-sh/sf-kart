@@ -10,9 +10,9 @@
 
 import * as THREE from 'three';
 import { SCALE, SEA_Y } from '../geo';
-import { DATA_BASE } from '../../paths';
+import { dataUrl } from '../../paths';
 
-const LIDAR_URL = `${DATA_BASE}/sf/debug/bridge_lidar.bin`;
+const LIDAR_URL = dataUrl('sf/debug/bridge_lidar.bin');
 
 export async function loadLidarOverlay(): Promise<THREE.Points | null> {
     let buf: ArrayBuffer;

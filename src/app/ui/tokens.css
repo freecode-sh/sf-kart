@@ -1,0 +1,108 @@
+/*
+ * SF Kart's design tokens: Fog. Karl the Fog is the ground: frosted fog-white cards over the live
+ * city, ink type, and one colour, the lap's International Orange. Tokens are named for their job,
+ * never their hue. The stylesheets use only these.
+ *
+ * The fonts are Latin subsets cut by tools/fonts/subset.sh (OFL-1.1, licences beside them).
+ */
+
+@font-face {
+    font-family: 'Archivo';
+    src: url('./fonts/ArchivoItalic.woff2') format('woff2');
+    font-weight: 700 900;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Paper Mono';
+    src: url('./fonts/PaperMono.woff2') format('woff2');
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Public Sans';
+    src: url('./fonts/PublicSans.woff2') format('woff2');
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    /* ---- Colour ---- */
+    --ground: #e9edf0; /* behind everything until the city is in */
+    --fog: rgb(243 245 246 / 0.92); /* cards and HUD plates */
+    --fog-solid: #f3f5f6;
+    /* The fog bank rolling in from the left, behind the card, so the city stays sharp on the right. */
+    --fog-bank: linear-gradient(90deg, rgb(236 240 243 / 0.9) 0%, rgb(236 240 243 / 0.62) 30%, rgb(236 240 243 / 0) 58%);
+    --fog-floor: linear-gradient(0deg, rgb(236 240 243 / 0.45) 0%, rgb(236 240 243 / 0) 32%);
+    --ink: #121417;
+    --ink-muted: #555b62;
+    --ink-faint: #80868d;
+    --line: rgb(18 20 23 / 0.1);
+    --fill: rgb(18 20 23 / 0.05); /* rows, tracks, keys */
+    --fill-hover: rgb(18 20 23 / 0.08);
+    --action: #121417; /* the one button per screen */
+    --action-edge: #000;
+    --on-action: #fff;
+    /* International Orange: the lap, you, what's selected. */
+    --signature: #fe6a00;
+    --faster: #0b7f66;
+    --slower: #c7383d;
+    --charge: #0aa6c2; /* the mini-turbo bar once charged (a fill, never text) */
+    /* The chart. */
+    /* (Semi-transparent: the city shows through the map.) */
+    --chart-water: rgb(214 223 230 / 0.4);
+    --chart-land: rgb(246 246 243 / 0.7);
+    --chart-street: rgb(18 20 23 / 0.06);
+    --chart-street-major: rgb(18 20 23 / 0.12);
+    --chart-coast: rgb(18 20 23 / 0.28);
+
+    /* ---- Type ---- */
+    --font-display: 'Archivo', 'Public Sans', ui-sans-serif, system-ui, sans-serif; /* italic, 116% wide */
+    --font-body: 'Public Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'Paper Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace; /* times, keys */
+    --text-label: 11px; /* small spaced capitals */
+    --text-body: 15px;
+    --text-title: 34px;
+    --text-logo: 48px;
+    --tracking-label: 0.16em;
+
+    /* ---- Space, shape, depth ---- */
+    --card-width: 424px;
+    --card-inset: 48px;
+    --radius-row: 10px;
+    --radius-button: 14px;
+    --radius-card: 22px;
+    --radius-plate: 14px;
+    --shadow-card: 0 24px 60px rgb(30 40 50 / 0.18);
+    --shadow-button: 0 5px 0 var(--action-edge), 0 12px 24px rgb(0 0 0 / 0.18);
+    --blur: 14px;
+
+    /* ---- Motion: multiples of the 60 ms frame ---- */
+    --dur-quick: 120ms;
+    --dur-base: 180ms;
+    --dur-slow: 240ms;
+    --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Reduced motion: every animation lands on its still end state at once. */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --dur-quick: 0ms;
+        --dur-base: 0ms;
+        --dur-slow: 0ms;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 1ms !important;
+        animation-delay: 0ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0ms !important;
+        transition-delay: 0ms !important;
+    }
+}

@@ -1,11 +1,22 @@
 /**
- * The speed-up pickups' gameplay: where the rows are, the pickup test and the respawn. Plain math
- * (deterministic by kart position and frame), shared by the app (itemBoxes.ts draws them), the
- * bots and the leaderboard's run verifier (src/app/run/verify.ts), so a run replays exactly.
+ * Speed-up pickups, the gameplay part: rows of pickups across the road at fixed points of the lap;
+ * driving through one stores a speed-up for the item button (storeSpeedUp, up to three; Sim.step
+ * adds it after the frame), and the pickup comes back ~4 s later. Plain math on the kart's position
+ * and the frame number, no DOM, so the app, run replays, the verifier (rules/resim.ts) and the bots
+ * (tools/sf/rivals.ts, pickupBot.ts) all collect the same pickups on the same frames and store them
+ * the same way. sf/itemBoxes.ts draws them.
  */
 
 import * as THREE from 'three';
-import type { Station } from './road';
+import { ItemId } from '../../game/item/ItemId';
+
+/** The centerline station fields the pickup layout reads (course_meta.json, sf/road.ts Station). */
+export interface PickupStation {
+    s: number;
+    pos: [number, number, number];
+    right: [number, number, number];
+    edges: { roadL: number; roadR: number; island: number };
+}
 
 /** Frames a collected pickup stays away (4 s). */
 const RESPAWN_FRAMES = 240;
@@ -19,7 +30,31 @@ const MAX_GAP = 2 * RADIUS;
 /** Pickup centres stay this far inside the road edge. */
 const EDGE_MARGIN = 250;
 
-export type XYZ = { x: number; y: number; z: number };
+type XYZ = { x: number; y: number; z: number };
+
+/** Speed-ups a kart can store (the engine's stock of three; the HUD's three slots). */
+export const MAX_SPEED_UPS = 3;
+
+/** The engine's item stock (KartItem.inventory()), the part the pickups use. */
+export interface SpeedUpStock {
+    currentCount(): number;
+    setItem(id: ItemId): void;
+    useItem(count: number): void;
+}
+
+/**
+ * A collected pickup: one more stored speed-up, up to MAX_SPEED_UPS; returns false when the stock
+ * was already full (the pickup is still taken, for nothing). Through the engine's own API: a fresh
+ * stock of three, less the ones the kart doesn't hold (useItem only empties the stock at 0).
+ */
+export function storeSpeedUp(stock: SpeedUpStock): boolean {
+    const n = stock.currentCount();
+    if (n >= MAX_SPEED_UPS) return false;
+    stock.setItem(ItemId.TRIPLE_MUSHROOM);
+    const spare = MAX_SPEED_UPS - (n + 1);
+    if (spare > 0) stock.useItem(spare);
+    return true;
+}
 
 /**
  * The pickup rows' S positions, every ~10-15 s of the lap: at the start of straights (not
@@ -46,7 +81,7 @@ export function pickupRows(seg: Record<string, [number, number]>): number[] {
 }
 
 /** The centerline interpolated at S: road point, right vector and the road edges. */
-function sampleAt(centerline: Station[], S: number): { pos: THREE.Vector3; right: THREE.Vector3; roadL: number; roadR: number; island: number } {
+function sampleAt(centerline: PickupStation[], S: number): { pos: THREE.Vector3; right: THREE.Vector3; roadL: number; roadR: number; island: number } {
     let i = 0;
     while (i < centerline.length - 2 && centerline[i + 1]!.s <= S) ++i;
     const a = centerline[i]!;
@@ -74,7 +109,7 @@ export class PickupField {
     readonly hitAt: number[] = [];
 
     /** `rows`: S positions of the pickup rows (each row spans the road). */
-    constructor(centerline: Station[], rows: number[]) {
+    constructor(centerline: PickupStation[], rows: number[]) {
         for (const S of rows) {
             const st = sampleAt(centerline, S);
             const mid = (st.roadL + st.roadR) / 2;

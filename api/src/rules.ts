@@ -1,17 +1,19 @@
 /**
- * The rules the API verifies runs with: the game's data files at the version it was deployed with
- * (DATA_VERSION, from the R2 bucket tools/uploadData.ts fills), loaded once per isolate. Their
- * rules id must be the RULES_ID the deploy computed (api/deploy.ts) from the same files.
+ * The rules the API verifies runs with: the game's rules files (the course and the vehicle data,
+ * src/app/rules/hash.ts) from the deploy copy of the data in R2 (tools/uploadData.ts), at the
+ * content-hashed names the deploy passes in (RULES_FILES), loaded once per isolate. Their rules hash
+ * must be the RULES_ID the deploy computed from the same files (api/deploy.ts).
  */
 
 import type { R2Bucket } from '@cloudflare/workers-types';
-import { RULES_FILES, rulesId } from '../../src/app/run/rules';
-import type { RulesData } from '../../src/app/run/verify';
+import { rulesHash } from '../../src/app/rules/hash';
+import type { RulesData } from '../../src/app/rules/resim';
 
 export interface RulesEnv {
     ASSETS: R2Bucket;
     DATA_PREFIX: string;
-    DATA_VERSION: string;
+    /** JSON: { kcl, kmp, meta, vehicles } → stored file (tools/lib/dataBuild.ts; `.gz`: gzipped). */
+    RULES_FILES: string;
     RULES_ID: string;
 }
 
@@ -25,25 +27,22 @@ export function loadRules(env: RulesEnv): Promise<RulesData> {
     return loaded;
 }
 
+async function read(env: RulesEnv, file: string): Promise<Uint8Array> {
+    const key = `${env.DATA_PREFIX}/${file}`;
+    const obj = await env.ASSETS.get(key);
+    if (!obj) throw new Error(`missing ${key}`);
+    const bytes = await obj.arrayBuffer();
+    if (!file.endsWith('.gz')) return new Uint8Array(bytes);
+    const gunzip = new DecompressionStream('gzip') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>;
+    return new Uint8Array(await new Response(new Response(bytes).body!.pipeThrough(gunzip)).arrayBuffer());
+}
+
 async function load(env: RulesEnv): Promise<RulesData> {
-    const files = await Promise.all(
-        RULES_FILES.map(async (f) => {
-            const key = `${env.DATA_PREFIX}/${env.DATA_VERSION}/data/${f}`;
-            const obj = await env.ASSETS.get(key);
-            if (!obj) throw new Error(`missing ${key}`);
-            return new Uint8Array(await obj.arrayBuffer());
-        }),
-    );
-    const id = await rulesId(files);
-    if (id !== env.RULES_ID) throw new Error(`rules ${id} in the data, ${env.RULES_ID} deployed`);
-    const [kcl, kmp, meta, vehicles] = files as [Uint8Array, Uint8Array, Uint8Array, Uint8Array];
+    const files = JSON.parse(env.RULES_FILES) as Record<'kcl' | 'kmp' | 'meta' | 'vehicles', string>;
+    const [kcl, kmp, meta, vehicles] = await Promise.all([read(env, files.kcl), read(env, files.kmp), read(env, files.meta), read(env, files.vehicles)]);
     const text = new TextDecoder();
-    return {
-        vehicleData: JSON.parse(text.decode(vehicles)),
-        course: new Map([
-            ['course.kcl', kcl],
-            ['course.kmp', kmp],
-        ]),
-        meta: JSON.parse(text.decode(meta)),
-    };
+    const data: RulesData = { kcl, kmp, meta: JSON.parse(text.decode(meta)), vehicles: JSON.parse(text.decode(vehicles)) };
+    const hash = await rulesHash(data);
+    if (hash !== env.RULES_ID) throw new Error(`rules ${hash} in the data, ${env.RULES_ID} deployed`);
+    return data;
 }

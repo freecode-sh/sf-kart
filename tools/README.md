@@ -5,6 +5,8 @@ Offline toolchain: the course builder, the bot, the San Francisco data bakes and
 ```
 tools/
   brandLint.ts       no game or brand names in the repository (run before committing)
+  brand/icons.sh     favicon.svg (the lap, favicon.ts) and its PNGs (icons.ts) → public/
+  verify.ts          verifies a run file (SFKR): the rules hash, then re-simulates it and checks its finish and splits
   course/            course generator and bot
     build.ts         build courses → public/data/courses/<id>/
     tracks/*.ts      one declarative TrackDef per course (tracks/index.ts lists them)
@@ -18,12 +20,17 @@ tools/
     kclcheck.ts      KCL sanity/octree completeness checker
     boundscheck.ts   boundary / shortcut audit: barrier holes and heights, nearby stretches without a key checkpoint between them, respawns, bot laps that push the walls
     jumpcheck.ts     gap-jump landings: bot runs across the lanes in every vehicle (coasting, braking, after a wall scrape, grinding the barrier up the ramp, veering out off the lip, with / without a trick), how far past the far edge each comes down
+  fonts/subset.sh    the UI fonts: Latin subsets of fonts/upstream/ → src/app/ui/fonts/ (pinned fontTools)
   ghost/rkg.ts       RKG (ghost) writer
   lib/bin.ts         BinWriter, CRCs
-  lib/dataVersion.ts the data's version (a hash of public/data) for the CDN build
+  lib/dataBuild.ts   the deploy copy of public/data (hashed names, gzip) → dist-data/, for the build and uploadData.ts
+  lib/padDriver.ts   a scripted, noisy human-ish driver making the app's raw pads (test runs through the live path)
+  lib/rulesFiles.ts  the rules' data from disk for re-simulating runs; lib/rulesHashPlugin.ts bakes RULES_HASH into the app
+  lib/originalParams.ts  the original game's parameter files, if you own them ($KART_COMMON_DIR)
   sf/                San Francisco data: fetch, bake, route, rivals, screenshots, recordings
+  uploadData.ts      sync dist-data/ to the CDN's R2 bucket (dry run unless --apply)
   vehicles/compare.ts  the vehicles' race stats and a bot lap each, with section splits
-  uploadData.ts      public/data → Cloudflare R2 (cdn.freecode.sh) under its version, before a deploy
+  vehicles/export.ts   provenance of vehicles.json (needs the original parameter files)
 ```
 
 Every tool's header documents its usage. Tools run from the repository root with `npx tsx`.
@@ -34,10 +41,10 @@ recordings. Only the baked results the game loads are written to `public/data/` 
 `bridgeFit.ts`'s thinned lidar points for the bridge viewer, to the gitignored
 `public/data/sf/debug/`).
 
-**External programs:** ImageMagick (`magick`: `tools/sf/dem.ts` decodes the terrain tiles for
-`bakeTrack.ts` and `bakeWorld.ts`; `bridgeFit.ts`),
-ffmpeg (`record.ts`) and Google Chrome (`shot.ts`, `record.ts`; set
-`$CHROME` to its binary if it isn't the default macOS install).
+**External programs:** ImageMagick (`magick`: `tools/sf/dem.ts`, `bakeWorld.ts`, `bridgeFit.ts`),
+ffmpeg (`record.ts`), Google Chrome (`shot.ts`, `record.ts`; set
+`$CHROME` to its binary if it isn't the default macOS install) and python3 (`fonts/subset.sh`,
+`brand/icons.sh`: each makes a throwaway venv with fontTools 4.60.1).
 
 ## Quick reference
 
@@ -47,8 +54,8 @@ npx tsx tools/course/botlap.ts <id> [--laps N] [--frames N] [--no-trick] [--vehi
 npx tsx tools/vehicles/compare.ts [id] [--tune JSON] [--only ebike,buggy]   # SF vehicles: race stats + a bot lap each, section splits
 npx tsx tools/course/preview.ts <id> [out.png] [--px 40] [--bbox x0,z0,x1,z1] [--wire]
 npx tsx tools/course/kclcheck.ts [id]         # octree completeness / floor types (default golden_gate)
-npx tsx tools/course/boundscheck.ts [id] [--drive]   # can a kart get out or cut the lap? (--drive: 27 boundary-pushing bot laps, ~40 s)
-npx tsx tools/course/jumpcheck.ts [id] [--jump N] [--lanes a,b] [--approaches grind,veer700] [-v]   # does every run clear each gap jump, and by how much? (~6 min a jump)
+npx tsx tools/course/boundscheck.ts <id> [--drive]   # can a kart get out or cut the lap? (--drive: 27 boundary-pushing bot laps, ~40 s)
+npx tsx tools/course/jumpcheck.ts <id> [--jump N] [--lanes a,b] [--approaches grind,veer700] [-v]   # does every run clear each gap jump, and by how much? (~6 min a jump)
 ```
 
 Output per course: `public/data/courses/<id>/{course.kcl, course.kmp, course_meta.json}`. The
@@ -69,8 +76,8 @@ Francisco pipeline (`tools/sf/*`) is described in the main README.
 ```ts
 const track: TrackDef = {
     id, name, description, laps: 3,
-    theme: { sky, fog, ground, road, offroad, wall, accent },   // '#rrggbb', copied to the meta (the SF renderer doesn't use it)
-    groundY: -6000,            // optional ground-plane hint, copied to the meta (null = no ground)
+    theme: { sky, fog, ground, road, offroad, wall, accent },   // '#rrggbb'
+    groundY: -6000,            // optional hint for the renderer (null = no ground)
     baseY: 4000,               // elevation at S = 0
     program: [                 // turtle: straights + arcs (deg > 0 = left turn), total turning ±360
         { kind: 'straight', len: 8000, name: 'start' },
@@ -178,15 +185,14 @@ Documented at the top of `tools/course/lib/kcl.ts` (prism layout, octree encodin
 
 ```jsonc
 {
-  "id": "golden_gate", "name": "Golden Gate", "description": "...", "units": "...",
-    "length": 801196.1, "laps": 1,
-  "theme": { "sky": "#a9d3f5", "fog": "#dfe9f1", "ground": "#6d8f5a", "road": "#5d6068",
-             "offroad": "#8a8f7a", "wall": "#c0392b", "accent": "#ff7a1f" },
-  "sectionTitles": { ... }, "seaY": 600, "tunnels": [ ... ],   // the TrackDef's `extra`
-  "groundY": 600,                       // suggested ground-plane height; null = none
+  "id": "golden_gate", "name": "Golden Gate", "description": "...",
+    "length": 719301.2, "laps": 1,
+  "theme": { "sky": "#7ec8ff", "fog": "#e8f4ff", "ground": "#f4f8ff", "road": "#c9ccd6",
+             "offroad": "#eef3ff", "wall": "#f2c14e", "accent": "#ff4fa3" },
+  "groundY": -6000,                     // suggested ground-plane height; null = none
   "bbox": { "min": [x, y, z], "max": [x, y, z] },   // drivable geometry (no fall boundaries)
   "crossSection": { "roadHalfWidth", "offroadWidth": [l, r], "wallHeight", "kcl": { ... } },
-  "start": { "pos": [x, y, z], "angleDeg": 0, "s": 5000, "width": 3200 },   // finish line (center, yaw, full width)
+  "start": { "pos": [x, y, z], "angleDeg": 0, "s": 5000, "width": 4400 },   // finish line (center, yaw, full width)
   "spawn": { "pos", "angleDeg", "s" },                                      // KTPT
   "segments": { "<name>": [s0, s1], ... },                                  // program segments in S
   "features": [
@@ -196,8 +202,6 @@ Documented at the top of `tools/course/lib/kcl.ts` (prism layout, octree encodin
     { "type": "jumpPad", "variant": 3, ... },
     { "type": "boostRamp" | "ramp", "attr", "height", "lipPos": [x, y, z], "lipAngleDeg", ... },
     { "type": "gap", ... },
-    { "type": "halfpipe", "side", "height", ... },
-    { "type": "airRoom", "side", "out", "easeIn", "easeOut" },
     { "type": "surface", "label", "attr", ... },
     { "type": "island", "halfWidth", "wallH", ... },
     { "type": "shortcut", "label", "attr", "pos": centroid,
@@ -205,7 +209,7 @@ Documented at the top of `tools/course/lib/kcl.ts` (prism layout, octree encodin
       "chord": [a, b] }
   ],
   "elevation": { "min", "max", "maxGrade" },
-  "minCenterlineRadius": 1693.8,
+  "minCenterlineRadius": 4805,
   "checkpoints": [{ "id", "s", "left": [x, z], "right": [x, z], "key", "jugem" }],   // key -1 = normal, 0 = finish
   "respawns": [{ "id", "s", "pos": [x, y, z], "angleDeg" }],
   "centerline": [{                                   // one per KCL station (150..500 apart)

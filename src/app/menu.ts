@@ -1,11 +1,13 @@
-/** Start / pause menu: vehicle, control scheme, audio, input and display settings. */
+/** The pause menu (Esc in race): Resume or Restart, and the few settings: ride, controls, volume, street detail, ghosts. */
 
-import { ENGINE_CREDIT, FREECODE_URL, INSTALL_COMMAND, REMIX_GUIDE_URL, SOURCE_URL } from './brand';
+import { ENGINE_CREDIT, REMIX_GUIDE_URL } from './brand';
 import { DEV_TOOLS } from './devMode';
 import { SF_CREDITS } from './sf/credits';
 import { SCHEMES, type SchemeId } from './input';
 import { STOCK_TUNE, TUNE_KNOBS, withTune, type StatSummary, type TuneKey, type VehicleTune } from './tuning';
-import { DEFAULT_VEHICLE, VEHICLES, vehicleDef, type VehicleId } from './vehicles';
+import { DEFAULT_VEHICLE, PICKER_ORDER, VEHICLES, vehicleDef, type VehicleId } from './vehicles';
+import { button, el, extLink, kbd, setChildren, type Child } from './ui/dom';
+import { freecodeLockup, wordmark } from './ui/identity';
 
 export interface MenuState {
     scheme: SchemeId;
@@ -20,7 +22,7 @@ export interface MenuState {
     vehicle: VehicleId;
     /** Stat adjustments being tried, per vehicle (on top of its data; dev tools only). */
     tunes: Partial<Record<VehicleId, Partial<VehicleTune>>>;
-    /** Race translucent ghosts of your best run in each vehicle. */
+    /** Race translucent ghosts of your best run in each of the other vehicles. */
     ghosts: boolean;
 }
 
@@ -32,9 +34,6 @@ export function effectiveTune(s: MenuState, id: VehicleId): VehicleTune {
 export interface MenuCallbacks {
     onStart(state: MenuState): void;
     onChange(state: MenuState): void;
-    /** The leaderboard's menu panel (kept across renders) and its refresh when the menu opens. */
-    leaderboard?: { panel: HTMLElement; open(): void };
-    bestFor(vehicle: VehicleId): string | null;
     /** The vehicle's race stats with `tune`. */
     statsFor(vehicle: VehicleId, tune: VehicleTune): StatSummary;
 }
@@ -96,7 +95,6 @@ export class Menu {
 
     open(): void {
         this.visible = true;
-        this.cb.leaderboard?.open();
         this.render();
         this.el.classList.add('open');
     }
@@ -138,125 +136,75 @@ export class Menu {
 
     private render(): void {
         const s = this.state;
-        const resume = this.raced;
-        this.el.innerHTML = `
-      <div class="menu-panel">
-        <div class="menu-title">SF KART <span>Golden Gate</span></div>
-        <div class="menu-sub">Race real San Francisco streets, from Crissy Field across the Golden Gate Bridge and back. Map data © OpenStreetMap contributors.</div>
-
-        <div class="menu-section">Vehicle <small>(<kbd>C</kbd> in race switches and restarts)</small></div>
-        ${this.vehicleCards()}
-        <div class="menu-row small">Drifting: hold drift and steer (even after the hop) to slide; sparks go blue (mini-turbo), then orange on the cars (super); let go to boost. No button, no drift.</div>
-        <div class="menu-row">
-          <label><input type="checkbox" data-opt="ghosts" ${s.ghosts ? 'checked' : ''}/> Compare ghosts <small>(race translucent ghosts of your best run in each vehicle; the results compare section splits)</small></label>
-        </div>
-        ${this.cb.leaderboard ? '<div data-leaderboard></div>' : ''}
-        ${DEV_TOOLS ? this.tuningPanel() : ''}
-
-        <div class="menu-row">
-          <span>Street detail <small>(San Francisco · <kbd>B</kbd> in race)</small></span>
-          <button class="pill ${s.streetDetail ? 'sel' : ''}" data-detail="on">On</button>
-          <button class="pill ${s.streetDetail ? '' : 'sel'}" data-detail="off">Off</button>
-          <small>Crosswalks, sidewalks and curbs, bike lanes, curb ramps and parking meters from DataSF.</small>
-        </div>
-
-        <div class="menu-section">Controls</div>
-        <div class="menu-cards schemes">
-          ${Object.values(SCHEMES)
-              .map(
-                  (sc) => `<button class="card ${sc.id === s.scheme ? 'sel' : ''}" data-scheme="${sc.id}">
-                <b>${sc.name}</b><small>${sc.tagline}</small>
-                <table>${sc.help.map(([k, a]) => `<tr><td><kbd>${k}</kbd></td><td>${a}</td></tr>`).join('')}</table>
-              </button>`,
-              )
-              .join('')}
-        </div>
-        <div class="menu-row">
-          <label><input type="checkbox" data-opt="smoothSteer" ${s.smoothSteer ? 'checked' : ''}/> Smooth keyboard steering <small>(ramps to full lock over 4 frames instead of snapping)</small></label>
-        </div>
-        <div class="menu-row">
-          <label><input type="checkbox" data-opt="interpolate" ${s.interpolate ? 'checked' : ''}/> Smooth frame interpolation <small>(blends between game frames on high-refresh displays; off shows each frame as soon as it's computed, with less lag)</small></label>
-        </div>
-        <div class="menu-row ${s.scheme === 'mouse' ? '' : 'dim'}">
-          <label>Mouse sensitivity <input type="range" min="1" max="12" step="0.5" value="${s.mouseSensitivity}" data-opt="mouseSensitivity"/> <span>${s.mouseSensitivity}</span></label>
-        </div>
-        <div class="menu-row">
-          <label>Volume <input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-opt="volume"/></label>
-          <label><input type="checkbox" data-opt="muted" ${s.muted ? 'checked' : ''}/> Mute</label>
-        </div>
-        <div class="menu-row small">
-          Gamepad always works: A accelerate · B brake · RB/RT hop, drift and tricks · LB/LT speed-up · D-pad ↑ wheelie.
-          In race: <kbd>Esc</kbd> menu · <kbd>Backspace</kbd> restart · <kbd>P</kbd> pause${DEV_TOOLS ? ' · <kbd>.</kbd> frame step · <kbd>`</kbd> debug · <kbd>K</kbd> live tuning' : ''}
-        </div>
-        <button class="menu-go">${resume ? 'Restart' : 'Race!'} <small>Enter</small></button>
-        ${resume ? '<button class="menu-resume">Resume <small>Esc</small></button>' : ''}
-
-        <div class="menu-foot">
-          <div class="menu-freecode">
-            <a href="${FREECODE_URL}" target="_blank" rel="noopener"><b>Built with freecode</b></a>, the free coding agent.
-            Remix SF Kart: a track in your city, a new vehicle, other weather.
-            <span class="menu-install"><code>${INSTALL_COMMAND}</code><button class="pill" data-copy-install>Copy</button></span>
-            <a href="${REMIX_GUIDE_URL}" target="_blank" rel="noopener">Remix guide</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source</a>
-          </div>
-          <details class="menu-credits">
-            <summary>Credits</summary>
-            <ul>${[ENGINE_CREDIT, ...SF_CREDITS].map((c) => `<li>${c}</li>`).join('')}</ul>
-          </details>
-        </div>
-      </div>`;
-
-        if (this.cb.leaderboard) this.el.querySelector('[data-leaderboard]')?.replaceWith(this.cb.leaderboard.panel);
-        this.el.querySelectorAll<HTMLElement>('[data-vehicle]').forEach((b) =>
-            b.addEventListener('click', () => this.set('vehicle', b.dataset.vehicle as VehicleId)),
+        const row = (label: string, ...control: Child[]) => el('div', { class: 'setting' }, el('span', { class: 'label' }, label), ...control);
+        const onOff = (key: 'streetDetail' | 'ghosts') =>
+            this.segments([true, false].map((on) => [on ? 'On' : 'Off', s[key] === on, () => this.set(key, on)] as const));
+        setChildren(
+            this.el,
+            el(
+                'section',
+                { class: 'card' },
+                wordmark('small'),
+                el('h2', null, this.raced ? 'Paused' : 'Settings'),
+                row('Ride', this.segments(PICKER_ORDER.map((id) => [vehicleDef(id).short, id === s.vehicle, () => this.set('vehicle', id)] as const))),
+                row('Controls', this.segments(Object.values(SCHEMES).map((sc) => [sc.short, sc.id === s.scheme, () => this.set('scheme', sc.id)] as const))),
+                s.scheme === 'mouse' ? row('Mouse', this.range('mouseSensitivity', 1, 12, 0.5)) : null,
+                row('Volume', this.range('volume', 0, 1, 0.05)),
+                row('Street detail', onOff('streetDetail')),
+                row('Ghosts', onOff('ghosts')),
+                DEV_TOOLS ? this.tuningPanel() : null,
+                el(
+                    'div',
+                    { class: 'menu-links' },
+                    freecodeLockup(),
+                    extLink(REMIX_GUIDE_URL, 'Remix it'),
+                    el('details', null, el('summary', null, 'Credits'), el('ul', null, ...[ENGINE_CREDIT, ...SF_CREDITS].map((c) => el('li', null, c)))),
+                ),
+                el(
+                    'div',
+                    { class: 'card-foot' },
+                    this.raced ? button({ class: 'back', on: { click: () => this.start() } }, 'Restart', kbd('Enter')) : el('span'),
+                    this.raced
+                        ? button({ class: 'go', on: { click: () => this.resume() } }, 'Resume', kbd('Esc'))
+                        : button({ class: 'go', on: { click: () => this.start() } }, 'Race!', kbd('Enter')),
+                ),
+            ),
         );
-        this.el.querySelectorAll<HTMLInputElement>('input[data-tune]').forEach((inp) => {
-            const key = inp.dataset.tune as TuneKey;
-            inp.addEventListener('input', () => {
-                const t = { ...(this.state.tunes[this.state.vehicle] ?? {}) };
-                t[key] = Number(inp.value);
-                this.state.tunes = { ...this.state.tunes, [this.state.vehicle]: t };
-                saveMenuState(this.state);
-                const out = inp.parentElement?.querySelector('output');
-                if (out) out.innerHTML = this.knobText(key);
-            });
-            inp.addEventListener('change', () => this.render());
-        });
-        this.el.querySelector('[data-tune-reset]')?.addEventListener('click', () => {
-            const tunes = { ...this.state.tunes };
-            delete tunes[this.state.vehicle];
-            this.set('tunes', tunes);
-        });
-        this.el.querySelector('[data-tune-copy]')?.addEventListener('click', () => {
-            void navigator.clipboard?.writeText(this.tuneJson());
-            const b = this.el.querySelector('[data-tune-copy]');
-            if (b) b.textContent = 'Copied';
-        });
-        this.el.querySelectorAll<HTMLElement>('[data-scheme]').forEach((b) =>
-            b.addEventListener('click', () => this.set('scheme', b.dataset.scheme as SchemeId)),
+    }
+
+    /** One of a few (label, selected, choose). */
+    private segments(opts: readonly (readonly [string, boolean, () => void])[]): HTMLElement {
+        return el(
+            'div',
+            { class: 'segments', role: 'radiogroup' },
+            ...opts.map(([label, sel, pick]) => button({ class: sel ? 'sel' : '', role: 'radio', 'aria-checked': sel, on: { click: pick } }, label)),
         );
-        this.el.querySelectorAll<HTMLElement>('[data-detail]').forEach((b) =>
-            b.addEventListener('click', () => this.set('streetDetail', b.dataset.detail === 'on')),
-        );
-        this.el.querySelectorAll<HTMLInputElement>('input[data-opt]').forEach((inp) => {
-            const key = inp.dataset.opt as keyof MenuState;
-            inp.addEventListener(inp.type === 'range' ? 'input' : 'change', () => {
-                const v = inp.type === 'checkbox' ? inp.checked : Number(inp.value);
-                (this.state as unknown as Record<string, unknown>)[key] = v;
-                saveMenuState(this.state);
-                this.cb.onChange(this.state);
-                if (inp.type !== 'range') this.render();
-                else {
-                    const span = inp.parentElement?.querySelector('span');
-                    if (span) span.textContent = String(v);
-                }
-            });
+    }
+
+    /** A settings slider. Moving the volume unmutes. */
+    private range(key: 'mouseSensitivity' | 'volume', min: number, max: number, step: number): HTMLInputElement {
+        const input = el('input', {
+            type: 'range',
+            min,
+            max,
+            step,
+            value: this.state[key],
+            on: {
+                input: () => {
+                    if (key === 'volume') this.state.muted = false;
+                    this.setOpt(key, Number(input.value), false);
+                },
+            },
         });
-        this.el.querySelector('[data-copy-install]')?.addEventListener('click', (e) => {
-            void navigator.clipboard?.writeText(INSTALL_COMMAND);
-            (e.currentTarget as HTMLElement).textContent = 'Copied';
-        });
-        this.el.querySelector('.menu-go')!.addEventListener('click', () => this.start());
-        this.el.querySelector('.menu-resume')?.addEventListener('click', () => this.resume());
+        return input;
+    }
+
+    /** Stores a setting from the menu's controls (sliders update in place, the rest re-render). */
+    private setOpt<K extends keyof MenuState>(key: K, v: MenuState[K], rerender: boolean): void {
+        this.state[key] = v;
+        saveMenuState(this.state);
+        this.cb.onChange(this.state);
+        if (rerender) this.render();
     }
 
     /** Closes the menu without restarting, if nothing that requires a restart changed. */
@@ -274,49 +222,13 @@ export class Menu {
         this.cb.onChange(this.state);
     }
 
-    /** Vehicle cards with stat bars (relative to the three vehicles; the numbers are the engine's). */
-    private vehicleCards(): string {
-        const s = this.state;
-        const stats = VEHICLES.map((v) => this.cb.statsFor(v.id, effectiveTune(s, v.id)));
-        const rows: { key: keyof StatSummary; label: string; fmt: (x: number) => string; invert?: boolean; kartOnly?: boolean }[] = [
-            { key: 'speed', label: 'Speed', fmt: (x) => x.toFixed(2) },
-            { key: 'accel', label: 'Accel', fmt: (x) => x.toFixed(3) },
-            { key: 'handling', label: 'Handling', fmt: (x) => x.toFixed(4) },
-            { key: 'drift', label: 'Drift', fmt: (x) => x.toFixed(4) },
-            { key: 'driftAngle', label: 'Drift angle', fmt: (x) => `${x.toFixed(1)}°`, kartOnly: true },
-            { key: 'turnDrag', label: 'Cornering', fmt: (x) => `-${x.toFixed(2)}%`, invert: true },
-            { key: 'offroad', label: 'Offroad', fmt: (x) => x.toFixed(3) },
-            { key: 'miniTurbo', label: 'Mini-turbo', fmt: (x) => `${x}f` },
-        ];
-        const bar = (key: keyof StatSummary, v: number, invert?: boolean) => {
-            const vals = stats.map((x) => x[key]);
-            const lo = Math.min(...vals);
-            const hi = Math.max(...vals);
-            let f = hi > lo ? (v - lo) / (hi - lo) : 0.5;
-            if (invert) f = 1 - f;
-            return `<span class="stat-bar"><span style="width:${(30 + 70 * f).toFixed(0)}%"></span></span>`;
-        };
-        return `<div class="menu-cards vehicles">${VEHICLES.map((v, i) => {
-            const st = stats[i]!;
-            const best = this.cb.bestFor(v.id);
-            const tuned = JSON.stringify(effectiveTune(s, v.id)) !== JSON.stringify(STOCK_TUNE);
-            const table = `<table class="stats">${rows
-                .map((r) => `<tr><td>${r.label}</td><td>${r.kartOnly && v.kind === 'bike' ? '' : bar(r.key, st[r.key], r.invert)}</td><td>${r.kartOnly && v.kind === 'bike' ? '—' : r.fmt(st[r.key])}</td></tr>`)
-                .join('')}</table>`;
-            return `<button class="card ${v.id === s.vehicle ? 'sel' : ''}" data-vehicle="${v.id}">
-                <b><i class="swatch" style="background:${v.color}"></i>${v.name}</b><small>${v.tagline}</small>
-                <i>${v.kind === 'bike' ? 'inside drift' : 'outside drift'}${tuned ? ' · tuned' : ''}${best ? ` · best ${best}` : ''}</i>${table}
-              </button>`;
-        }).join('')}</div>`;
-    }
-
     /** Label of a tuning knob: the multiplier and what it does to the stat. */
-    private knobText(key: TuneKey): string {
+    private knobText(key: TuneKey): Child[] {
         const t = effectiveTune(this.state, this.state.vehicle);
         const v = t[key];
-        if (key === 'miniTurbo') return `${v >= 0 ? '+' : ''}${v} f`;
+        if (key === 'miniTurbo') return [`${v >= 0 ? '+' : ''}${v} f`];
         const pct = (v - 1) * 100;
-        return `×${v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')} <small>(${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</small>`;
+        return [`×${v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')} `, el('small', null, `(${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`)];
     }
 
     /** Every vehicle's non-stock tune (multipliers on its data). */
@@ -331,8 +243,9 @@ export class Menu {
         return JSON.stringify(out, null, 2);
     }
 
+
     /** Sliders for the selected vehicle's stat adjustments. */
-    private tuningPanel(): string {
+    private tuningPanel(): HTMLElement {
         const s = this.state;
         const def = vehicleDef(s.vehicle);
         const t = effectiveTune(s, s.vehicle);
@@ -340,21 +253,73 @@ export class Menu {
         const now = this.cb.statsFor(s.vehicle, t);
         const knobs = TUNE_KNOBS.filter((k) => !(k.kartOnly && def.kind === 'bike'));
         const json = this.tuneJson();
-        return `<details class="tuning" ${s.tunes[s.vehicle] ? 'open' : ''}>
-          <summary>Tuning: ${def.name} <small>(small nudges on the stock numbers; applies when the race restarts)</small></summary>
-          <table>${knobs
-              .map((k) => {
-                  const a = stock[k.key];
-                  const b = now[k.key];
-                  const fmt = (x: number) => (k.key === 'miniTurbo' ? `${x}f` : x.toPrecision(4));
-                  return `<tr title="${k.help}"><td>${k.label}</td>
-                    <td><input type="range" min="${k.min}" max="${k.max}" step="${k.step}" value="${t[k.key]}" data-tune="${k.key}"/> <output>${this.knobText(k.key)}</output></td>
-                    <td><small>${a === b ? fmt(a) : `${fmt(a)} → <b>${fmt(b)}</b>`}</small></td></tr>`;
-              })
-              .join('')}</table>
-          <div class="menu-row"><button class="pill" data-tune-reset>Reset ${def.name} to stock</button><button class="pill" data-tune-copy>Copy tuning</button>
-          <small>Multipliers on the vehicle's numbers: bake them into public/data/vehicles/vehicles.json to make them the default.</small></div>
-          ${json !== '{}' ? `<pre class="tune-json">${json}</pre>` : ''}
-        </details>`;
+        const knobRow = (k: (typeof TUNE_KNOBS)[number]) => {
+            const a = stock[k.key];
+            const b = now[k.key];
+            const fmt = (x: number) => (k.key === 'miniTurbo' ? `${x}f` : x.toPrecision(4));
+            const out = el('output', null, ...this.knobText(k.key));
+            const input = el('input', {
+                type: 'range',
+                min: k.min,
+                max: k.max,
+                step: k.step,
+                value: t[k.key],
+                on: {
+                    input: () => {
+                        const tune = { ...(this.state.tunes[this.state.vehicle] ?? {}) };
+                        tune[k.key] = Number(input.value);
+                        this.state.tunes = { ...this.state.tunes, [this.state.vehicle]: tune };
+                        saveMenuState(this.state);
+                        setChildren(out, ...this.knobText(k.key));
+                    },
+                    change: () => this.render(),
+                },
+            });
+            return el(
+                'tr',
+                { title: k.help },
+                el('td', null, k.label),
+                el('td', null, input, ' ', out),
+                el('td', null, el('small', null, ...(a === b ? [fmt(a)] : [`${fmt(a)} → `, el('b', null, fmt(b))]))),
+            );
+        };
+        const copy = button(
+            {
+                class: 'pill',
+                on: {
+                    click: () => {
+                        void navigator.clipboard?.writeText(this.tuneJson());
+                        copy.textContent = 'Copied';
+                    },
+                },
+            },
+            'Copy tuning',
+        );
+        return el(
+            'details',
+            { class: 'tuning', open: !!s.tunes[s.vehicle] },
+            el('summary', null, `Tuning: ${def.name} `, el('small', null, '(small nudges on the stock numbers; applies when the race restarts)')),
+            el('table', null, ...knobs.map(knobRow)),
+            el(
+                'div',
+                { class: 'menu-row' },
+                button(
+                    {
+                        class: 'pill',
+                        on: {
+                            click: () => {
+                                const tunes = { ...this.state.tunes };
+                                delete tunes[this.state.vehicle];
+                                this.set('tunes', tunes);
+                            },
+                        },
+                    },
+                    `Reset ${def.name} to stock`,
+                ),
+                copy,
+                el('small', null, "Multipliers on the vehicle's numbers: bake them into public/data/vehicles/vehicles.json to make them the default."),
+            ),
+            json !== '{}' ? el('pre', { class: 'tune-json' }, json) : null,
+        );
     }
 }

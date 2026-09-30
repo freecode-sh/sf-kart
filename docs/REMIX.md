@@ -17,8 +17,8 @@ reading yourself too.
 |---|---|---|
 | Recolour a vehicle, give it a new rider or passenger | `src/app/sf/ebike.ts`, `robotaxi.ts`, `buggy.ts` (on `carKit.ts` / `modelKit.ts`) | "Make the Tour Buggy a mint-green convertible with a dog in the passenger seat." |
 | New speed-up pickup look | `src/app/sf/itemBoxes.ts` (`pickupKindFor`) | "Give the e-bike a sourdough loaf pickup instead of coffee, with crumbs when it bursts." |
-| New trick flourish | `src/app/sf/vehicleModel.ts` (`trickFlourish`) and each model's `update` | "Make the Robotaxi do a corkscrew on up-tricks and flash its roof lights." |
-| Rename or re-time the rivals | `tools/sf/rivals.ts`, then `npx tsx tools/sf/rivals.ts` | "Add a sixth rival called Fog Horn on the Robotaxi, about as fast as Muni." |
+| New trick flourish | `src/app/sf/vehicleModel.ts` (`trickFlourish`) and each model's `update` | "Make the Robo Car do a corkscrew on up-tricks and flash its roof lights." |
+| Rename or re-time the rivals | `tools/sf/rivals.ts`, then `npx tsx tools/sf/rivals.ts` | "Add a sixth rival called Fog Horn on the Robo Car, about as fast as Muni." |
 | A new vehicle | `src/app/vehicles.ts`, `public/data/vehicles/vehicles.json`, a model in `src/app/sf/` registered in `vehicleModels.ts` | "Add a cable car: heavy, slow off the line, but the best top speed downhill." |
 | Tune how a vehicle drives | `public/data/vehicles/vehicles.json` (or `K` in race on the dev server) | "Make the E-Bike a little quicker off the line without changing its top speed." |
 | Weather or time of day | `src/app/sf/sky.ts` (`LIGHTING`) | "Add a foggy morning: low sun, thick fog rolling through the Gate." |
@@ -37,9 +37,8 @@ npx tsx tools/sf/pickupBot.ts
 The San Francisco course is baked offline from open data. Nothing streams from a map service while
 you play. The pipeline is in `tools/sf/` and has five parts:
 
-1. **Area and projection:** `tools/sf/geo.ts` (`BBOX`, `ORIGIN`, the `CORE` and `FAR` extents),
-   the terrain grid (`TERRAIN` in `tools/sf/terrainBake.ts`) and the downloaded tiles
-   (`tools/sf/sources.ts`). Change these to your city.
+1. **Area and projection:** `tools/sf/geo.ts` (`BBOX`, `ORIGIN`, the `CORE` and `FAR` extents).
+   Change these to your city.
 2. **Downloads:** `tools/sf/fetch.ts`:
    - OpenStreetMap (worldwide)
    - AWS Terrain Tiles (worldwide)
@@ -57,20 +56,18 @@ you play. The pipeline is in `tools/sf/` and has five parts:
    bridge, Fort Point, the Palace). Your city's landmarks go here.
 
 Tips:
-- Keep the lap about 2–3 minutes: 9–14 km at the game's 60 units per metre (the Golden Gate lap is
-  13.4 km).
-- Keep the collision under the engine's limit of 65,535 normals (the build fails past it;
-  `npx tsx tools/course/kclcheck.ts` prints the count).
+- Keep the lap about 2–3 minutes: 8–12 km at the game's 60 units per metre.
+- Keep the collision under the engine's limit of 65,535 triangle normals (`npx tsx tools/course/kclcheck.ts`).
 - Drive the bot (`npx tsx tools/course/botlap.ts golden_gate`) after every change: it reports
-  wall and off-road frames, every jump and every fall with where it happened along the lap.
+  wall hits, off-road frames and falls by section.
 
 Only use data you're allowed to redistribute, and credit it: see [DATA_LICENSE.md](../DATA_LICENSE.md).
 
 ## Share it
 
-Deploy the static build anywhere: `npm run build` produces `dist/`. Set `SFK_BASE=/` to serve from a
-domain root. The leaderboard is freecode's and stays off in your build. To run your own, deploy
-`api/` to your Cloudflare account and build with `SFK_API` set to it. Tag your remix with **#sfkart** and **@freecode_sh**.
+Deploy the static build anywhere: `npm run build` produces `dist/`, data included. Set `SFK_BASE=/`
+to serve from a domain root, and `SFK_DATA_BASE` to load the data from a CDN of your own (see the
+README's Hosting section). Tag your remix with **#sfkart** and **@freecode**.
 
 ## Rules of the road
 

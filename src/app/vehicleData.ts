@@ -13,9 +13,9 @@ import { RamStream } from '../egg/util/Stream';
 import { KartParam } from '../game/kart/KartParam';
 import { ResourceManager } from '../game/system/ResourceManager';
 import type { VehicleId } from './vehicles';
-import { DATA_BASE } from './paths';
 
-export const VEHICLE_DATA_URL = `${DATA_BASE}/vehicles/vehicles.json`;
+/** The file's data path (paths.ts). */
+export const VEHICLE_DATA = 'vehicles/vehicles.json';
 
 export type Vec3 = [number, number, number];
 

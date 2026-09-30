@@ -11,3 +11,9 @@ export const signInUrl = (returnTo: string) => `${FREECODE_URL}/sign-in?returnTo
 /** The engine's lineage, as the About panel, CREDITS.md and the README state it. */
 export const ENGINE_CREDIT =
     'Driving physics: a TypeScript port of Kinoko (MIT), an independent open-source reimplementation of a classic console kart racer’s physics.';
+
+/**
+ * The launch post the title shows (an X post: https://x.com/<user>/status/<id>); null shows none.
+ * The dev server takes `?post=<url>` to try one.
+ */
+export const LAUNCH_POST_URL: string | null = null;

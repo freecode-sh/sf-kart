@@ -105,3 +105,5 @@ try {
     ws.close();
     chrome.kill();
 }
+// (Chrome's crash reporter can outlive it holding our stdio pipes, which would keep Node waiting.)
+process.exit(0);

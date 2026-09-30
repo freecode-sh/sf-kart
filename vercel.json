@@ -14,7 +14,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn.freecode.sh; worker-src 'self' blob:; media-src 'self' blob:; connect-src 'self' https://cdn.freecode.sh https://sfkart-api.freecode.sh https://auth.freecode.sh; frame-ancestors 'self' https://freecode.sh; base-uri 'self'; form-action 'none'"
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://platform.x.com https://platform.twitter.com; frame-src https://platform.twitter.com https://platform.x.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn.freecode.sh; worker-src 'self' blob:; media-src 'self' blob:; connect-src 'self' https://cdn.freecode.sh https://sfkart-api.freecode.sh https://auth.freecode.sh; frame-ancestors 'self' https://freecode.sh; base-uri 'self'; form-action 'none'"
         },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
@@ -25,8 +25,32 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
       "source": "/sf-kart/data/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/data/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/sf-kart",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/sf-kart/",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/sf-kart/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     }
   ]
 }

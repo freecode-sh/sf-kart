@@ -19,7 +19,7 @@ import { loadLidarOverlay } from './bridgeParts/lidarOverlay';
 import { type CourseFeature, boostKickers, cutGaps, useCourseFeatures } from './bridgeParts/features';
 import { buildBridgeModel } from './bridgeParts/real';
 import { stats } from './landmarks/kit';
-import { DATA_BASE } from '../paths';
+import { loadDataJson } from '../data';
 
 export type BridgeOptions = {
     /**
@@ -97,7 +97,7 @@ export async function viewerBuild(): Promise<{ object: THREE.Object3D; camera?: 
     let centerline: CenterlinePoint[] | undefined;
     let features: CourseFeature[] | undefined;
     try {
-        const meta = (await (await fetch(`${DATA_BASE}/courses/golden_gate/course_meta.json`)).json()) as { centerline: CenterlinePoint[]; features?: CourseFeature[] };
+        const meta = await loadDataJson<{ centerline: CenterlinePoint[]; features?: CourseFeature[] }>('courses/golden_gate/course_meta.json');
         centerline = meta.centerline;
         features = meta.features;
     } catch {

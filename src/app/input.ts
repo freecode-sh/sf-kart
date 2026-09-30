@@ -59,13 +59,25 @@ export interface ControlScheme {
     dpadTricks?: boolean;
     /** Human-readable help rows: [keys, action]. */
     help: [string, string][];
+    /** The name on a small tab. */
+    short: string;
+    /** The first lap's keys, [keys (space separated), action]: the controls screen. */
+    quick: [string, string][];
 }
 
 export const SCHEMES: Record<SchemeId, ControlScheme> = {
     wasd: {
         id: 'wasd',
         name: 'WASD',
+        short: 'WASD',
         tagline: 'Keyboard only. Left hand drives, thumb drifts.',
+        quick: [
+            ['W', 'Go'],
+            ['A D', 'Steer'],
+            ['Space', 'Drift'],
+            ['E', 'Speed-up'],
+            ['S', 'Brake'],
+        ],
         keys: {
             accelerate: ['KeyW'],
             brake: ['KeyS'],
@@ -90,6 +102,14 @@ export const SCHEMES: Record<SchemeId, ControlScheme> = {
     mouse: {
         id: 'mouse',
         name: 'WASD + Mouse',
+        short: 'Mouse',
+        quick: [
+            ['W', 'Go'],
+            ['Mouse', 'Steer'],
+            ['Click', 'Drift'],
+            ['E', 'Speed-up'],
+            ['S', 'Brake'],
+        ],
         tagline: 'Analog steering with the mouse, so you can feather drift angles like a real stick.',
         keys: {
             accelerate: ['KeyW'],
@@ -117,7 +137,15 @@ export const SCHEMES: Record<SchemeId, ControlScheme> = {
     classic: {
         id: 'classic',
         name: 'Arrows',
-        tagline: 'A classic keyboard layout: the arrows are the whole stick.',
+        short: 'Arrows',
+        quick: [
+            ['X', 'Go'],
+            ['← →', 'Steer'],
+            ['W', 'Drift'],
+            ['Q', 'Speed-up'],
+            ['Z', 'Brake'],
+        ],
+        tagline: 'A classic emulator keyboard layout: the arrows are the whole stick.',
         keys: {
             accelerate: ['KeyX'],
             brake: ['KeyZ'],
@@ -197,6 +225,8 @@ export class InputManager {
     settings: InputSettings = { scheme: 'wasd', smoothSteer: true, mouseSensitivity: 4 };
     /** Off while the menu is open: sample() then gives an idle pad. */
     enabled = true;
+    /** A gamepad was used since this was last cleared (run files note the input device). */
+    usedGamepad = false;
 
     constructor(private readonly target: HTMLElement) {
         window.addEventListener('keydown', (e) => {
@@ -287,9 +317,9 @@ export class InputManager {
         }
 
         let buttons = 0;
-        // Direction held right now; the race input only gets it on the frame it's pressed (a trick
-        // input lasts exactly one frame, as in recorded ghosts, so holding the button through a
-        // landing doesn't start a wheelie).
+        // Direction held right now; the race input only gets it on the frame it's pressed (the real
+        // controller layer does this: every trick in real ghosts lasts exactly one frame, so
+        // holding the button through a landing doesn't start a wheelie).
         let trick = TrickDir.None;
         if (this.held('accelerate')) buttons |= BUTTON_ACCELERATE;
         if (this.held('brake')) buttons |= BUTTON_BRAKE;
@@ -359,6 +389,7 @@ export class InputManager {
             const qy = quantizeAxis(ay);
             if (qx !== 7) stickXRaw = qx;
             if (qy !== 7) stickYRaw = qy;
+            if (qx !== 7 || qy !== 7 || pad.buttons.some((b) => b.pressed)) this.usedGamepad = true;
             break;
         }
 

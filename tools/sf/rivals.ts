@@ -1,7 +1,8 @@
 /**
  * Records the CPU rivals for the Golden Gate course: bot runs (tools/course/botlap.ts) in a mix of
  * vehicles with different skills and lines, collecting the speed-up pickups like the player (the same
- * layout and rule as the app, itemBoxes.ts), captured frame by frame (position, rotation, lap progress) into
+ * layout and rule as the app, rules/pickups.ts: each stores a speed-up) and using them just past each
+ * row, captured frame by frame (position, rotation, lap progress) into
  *   public/data/courses/golden_gate/rivals.bin   (per rival, every 2nd frame: pos f32x3, quat i16x4, dist f32)
  *   public/data/courses/golden_gate/rivals.json  (names, colors, frame counts, finish frames)
  * The app plays them back in sync with the race (they don't collide; the engine is single-player).
@@ -12,7 +13,8 @@
 import { writeFileSync } from 'node:fs';
 import { KartObjectManager } from '../../src/game/kart/KartObjectManager';
 import { RaceManager, Stage } from '../../src/game/system/RaceManager';
-import { PickupField, pickupRows } from '../../src/app/sf/pickupField';
+import { ItemDirector } from '../../src/game/item/ItemDirector';
+import { PickupField, pickupRows, storeSpeedUp } from '../../src/app/rules/pickups';
 import type { Station } from '../../src/app/sf/road';
 import { vehicleSlot } from '../../src/app/vehicleData';
 import type { VehicleId } from '../../src/app/vehicles';
@@ -39,7 +41,7 @@ type Rival = {
 };
 
 const RIVALS: Rival[] = [
-    // A spread from ~2:42 (hard to beat: needs mini-turbos, tricks and the stored boosts) to ~3:05,
+    // A spread from ~2:43 (hard to beat: needs mini-turbos, tricks and the stored boosts) to ~3:07,
     // across all three vehicles.
     { name: 'Karl the Fog', vehicle: 'robotaxi', color: '#d9dee6', accent: '#6b7a8f', line: 350, autoDrift: true, lanes: true, boosts: [['bridge_nb', 0.05], ['bridge_sb', 0.1], ['parkway', 0.4]], lift: { every: 60000, len: 3400 } },
     { name: 'Sutro', vehicle: 'ebike', color: '#e53935', accent: '#fafafa', line: -450, autoDrift: true, lanes: true, boosts: [['bridge_sb', 0.55]], lift: { every: 60000, len: 3600 } },
@@ -66,6 +68,8 @@ for (const r of RIVALS) {
         for (const f of meta.features)
             if (f.type === 'dashPanel' && f.lat && onBridge(f.s[0]))
                 actions.push({ from: f.s[0] - 4500, to: f.s[1], action: 'offset', value: (f.lat[0] + f.lat[1]) / 2 });
+    // A stored speed-up used just past each pickup row (the row stores one back).
+    for (const s of pickupRowsS) actions.push({ from: s + 300, to: s + 600, action: 'item' });
     for (const [name, frac] of r.boosts ?? []) {
         const s = seg[name]!;
         const at = s[0] + (s[1] - s[0]) * frac;
@@ -92,7 +96,7 @@ for (const r of RIVALS) {
             lastS = f.s;
             frames.push({ pos: [...f.pos], q: [q.v.x, q.v.y, q.v.z, q.w], dist: laps * L + f.s - (meta.start as { s: number }).s });
             const p = k.pos();
-            if (RaceManager.Instance()!.stage() === Stage.Race && pickups.check({ x: p.x, y: p.y, z: p.z }, frames.length) > 0) k.move().activateMushroom();
+            if (RaceManager.Instance()!.stage() === Stage.Race && pickups.check({ x: p.x, y: p.y, z: p.z }, frames.length) > 0) storeSpeedUp(ItemDirector.Instance()!.kartItem(0).inventory());
         },
     });
     // Frames before the recording starts (intro): the bot's onFrame covers every frame from 0.

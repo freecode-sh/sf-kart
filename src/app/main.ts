@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { AudioEngine } from './audio';
 import { formatFrames, Hud } from './hud';
-import { BUTTON_ACCELERATE, BUTTON_BRAKE, InputManager, type RawPadState } from './input';
+import { BUTTON_ACCELERATE, BUTTON_BRAKE, InputManager, type RawPadState, type SchemeId } from './input';
 import { DEV_TOOLS } from './devMode';
 import { effectiveTune, loadMenuState, Menu } from './menu';
 import { Renderer, type CameraState, type CourseMeta } from './renderer';
@@ -14,39 +14,39 @@ import { ScaleMoment } from './renderScale';
 import { Sim } from './sim';
 import { SfHud, type SfHudMeta } from './sf/sfHud';
 import { SfMusic } from './sf/music';
-import { CompareGhosts, loadRun, RunRecorder, saveRun } from './sf/ghosts';
+import { CompareGhosts } from './sf/ghosts';
+import { RunRecorder, type GhostRun } from './sf/ghostTrack';
+import { GhostSim } from './sf/ghostSim';
+import { dropPoseGhosts, loadRuns, storeRun, type StoredRun } from './sf/runStore';
 import { pickupKindFor } from './sf/itemBoxes';
 import { DevTuning } from './devTuning';
 import type { SplitColumn } from './sf/sfHud';
-import { STOCK_TUNE, summarize, tuneStats, type StatSummary, type VehicleTune } from './tuning';
-import { engineStats, packVehicleFiles, VEHICLE_DATA_URL, vehicleSlot, type VehicleDataFile } from './vehicleData';
-import { Leaderboard } from './leaderboard/leaderboard';
-import { RULES } from './leaderboard/api';
-import { finishTimeMs, kartParamFor as packTunedKartParam } from './run/race';
-import { encodeRun } from './run/runFile';
+import { isStock, STOCK_TUNE, summarize, tuneStats, type StatSummary, type VehicleTune } from './tuning';
+import { engineStats, packKartParam, packVehicleFiles, VEHICLE_DATA, vehicleSlot, type VehicleDataFile } from './vehicleData';
 import { VEHICLES, vehicleDef, type VehicleId } from './vehicles';
-import { DATA_BASE } from './paths';
+import { dataProgress, loadData, loadDataJson } from './data';
+import { prefetchBoot } from './bootData';
+import { loadingScreen } from './ui/identity';
+import { titleShot } from './sf/titleShots';
+import { Onboarding, type LoadState, type Screen } from './ui/onboarding';
+import type { BoardEntry } from './ui/leaderboard';
+import { OnlineBoard } from './leaderboard/leaderboard';
+import { RACE_START, type RivalInfo } from './sf/rivals';
+import { CourseRules, CourseTracker, type RulesMeta } from './rules/course';
+import { rulesMeta } from './rules/hash';
+import { decodeRun, encodeRun, fromBase64, InputDevice, RUN_TUNED, toBase64 } from './rules/runfile';
+import { RULES_HASH } from 'virtual:sfkart-rules-hash';
 
 const FRAME_SEC = 1 / 59.94;
 
 /** The course: San Francisco, Golden Gate (built by tools/course/build.ts golden_gate). */
 const COURSE_ID = 'golden_gate';
-const COURSE_DIR = `${DATA_BASE}/courses/${COURSE_ID}`;
+const COURSE_DIR = `courses/${COURSE_ID}`;
 
 async function fetchBytes(url: string): Promise<Uint8Array> {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to load ${url}: ${res.status}`);
     return new Uint8Array(await res.arrayBuffer());
-}
-
-async function fetchJson<T>(url: string): Promise<T | null> {
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        return (await res.json()) as T;
-    } catch {
-        return null;
-    }
 }
 
 const BEST_KEY = 'kart.best.v1';
@@ -62,27 +62,50 @@ function loadBests(): Record<string, number> {
     }
 }
 
+/** The loading line while the data downloads (`core`: the course is in, the city still loading). */
+function downloadState(core: boolean): LoadState {
+    const p = dataProgress();
+    const got = p.expected > 0 ? Math.min(1, p.received / p.expected) : 0;
+    if (p.pending > 0 || !core) return { fraction: 0.9 * got, status: `Loading San Francisco… ${Math.floor(got * 100)}%`, ready: false };
+    return { fraction: 0.95, status: 'Building the city…', ready: false };
+}
+
 async function main(): Promise<void> {
+    const saved = loadMenuState();
+    prefetchBoot(saved.streetDetail);
     const canvas = document.getElementById('view') as HTMLCanvasElement;
     const hudRoot = document.getElementById('hud') as HTMLElement;
-    const loading = document.createElement('div');
-    loading.className = 'loading';
-    loading.textContent = 'Loading…';
-    document.body.appendChild(loading);
+
+    // The way in (title, vehicle, controls, welcome) shows at once; the game loads behind it and
+    // fills in its hooks (`late`) as it goes.
+    const late: {
+        vehicle?: (id: VehicleId) => void;
+        scheme?: (id: SchemeId) => void;
+        race?: (vehicle: VehicleId, scheme: SchemeId) => void;
+        load?: () => LoadState;
+    } = {};
+    /** The camera drifts through shots of the course (sf/titleShots.ts) behind the title and the ride picker, since this time. */
+    let titleSince: number | null = null;
+    let shownVeil = -1;
+    const onboarding = new Onboarding(saved.vehicle, saved.scheme, {
+        onVehicle: (id) => late.vehicle?.(id),
+        onScheme: (id) => late.scheme?.(id),
+        onScreen: (screen: Screen | null) => {
+            titleSince = screen === 'title' || screen === 'vehicle' ? (titleSince ?? performance.now()) : null;
+        },
+        onRace: ({ vehicle, scheme }) => late.race?.(vehicle, scheme),
+        loadState: () => late.load?.() ?? downloadState(false),
+    });
 
     const [vehicleData, course] = await Promise.all([
-        (async () => {
-            const data = await fetchJson<VehicleDataFile>(VEHICLE_DATA_URL);
-            if (!data) throw new Error(`Failed to load ${VEHICLE_DATA_URL}`);
-            return data;
-        })(),
+        loadDataJson<VehicleDataFile>(VEHICLE_DATA),
         (async () => {
             const [kcl, kmp, meta] = await Promise.all([
-                fetchBytes(`${COURSE_DIR}/course.kcl`),
-                fetchBytes(`${COURSE_DIR}/course.kmp`),
-                fetchJson<CourseMeta>(`${COURSE_DIR}/course_meta.json`),
+                loadData(`${COURSE_DIR}/course.kcl`),
+                loadData(`${COURSE_DIR}/course.kmp`),
+                loadDataJson<CourseMeta>(`${COURSE_DIR}/course_meta.json`).catch(() => null),
             ]);
-            return { files: new Map([['course.kcl', kcl], ['course.kmp', kmp]]), meta };
+            return { files: new Map([['course.kcl', new Uint8Array(kcl)], ['course.kmp', new Uint8Array(kmp)]]), meta };
         })(),
     ]);
     // The engine's parameter files, packed from our vehicle data.
@@ -110,11 +133,14 @@ async function main(): Promise<void> {
     };
     setupSfHud();
     const sim = new Sim(common, course.files);
+    // The course's rules (speed-up pickups, section splits): run by the sim after every frame.
+    const rulesCourse = course.meta?.segments ? rulesMeta(course.meta as unknown as RulesMeta) : null;
+    sim.setRules(rulesCourse ? new CourseRules(rulesCourse) : null);
     /** The vehicle the current race runs with (the menu's choice applies on the next start). */
     let vehicle: VehicleId = state0.vehicle;
     /** The tune (JSON) the current race runs with. */
     let raceTune = '';
-    /** What makes runs comparable: the vehicle's tune and the vehicle data's version (saved runs store this string). */
+    /** What makes runs comparable: the vehicle's tune (and the drift layer's version). */
     const runSig = (id: VehicleId) => `${JSON.stringify(effectiveTune(state0, id))}|drift|v${vehicleData.version}`;
     const tunedParams = new Map<string, Uint8Array>();
     /** kartParam.bin with `id`'s stats adjusted by `tune` (cached). */
@@ -122,7 +148,7 @@ async function main(): Promise<void> {
         const key = `${id}:${JSON.stringify(tune)}`;
         let b = tunedParams.get(key);
         if (!b) {
-            b = packTunedKartParam(vehicleData, id, tune);
+            b = packKartParam(vehicleData, { [id]: tuneStats(vehicleData.vehicles[id].stats, tune) });
             tunedParams.set(key, b);
         }
         return b;
@@ -151,7 +177,10 @@ async function main(): Promise<void> {
     applyVehicle(vehicle);
     sim.laps = typeof course.meta?.laps === 'number' ? course.meta.laps : 1;
     sim.start();
-    loading.remove();
+    /** San Francisco's scenery is built (or there is none): a race can start. */
+    let sceneReady = !renderer.sf;
+    void renderer.sf?.ready.then(() => (sceneReady = true));
+    late.load = () => (sceneReady ? { fraction: 1, status: 'Ready to race', ready: true } : downloadState(true));
 
     let paused = false;
     /** Debug free camera (window.__kart.look); null = the game camera. */
@@ -168,22 +197,45 @@ async function main(): Promise<void> {
     /** The stats were changed mid-race (dev tuning): the run can't be reproduced, so it isn't kept. */
     let liveTuned = false;
     let saveReplays = false;
-    let splitEntry: Record<string, number> = {};
-    let splitSection = '';
+    /** The last finished run as a run file (rules/runfile.ts), for the dev hook's lastRun(). */
+    let lastRun: Promise<Uint8Array> | null = null;
     let ghosts: CompareGhosts | null = null;
+    /** Your best run of each vehicle (kept as run files, runStore.ts) and their ghosts' pose tracks. */
+    const bestRuns = new Map<VehicleId, StoredRun>();
+    const ghostTracks = new Map<VehicleId, GhostRun>();
     const ghostLabel = (id: VehicleId, frames: number, tune: string) =>
         `${vehicleDef(id).short} ${formatFrames(frames).slice(0, -2)}${tune !== runSig(id) ? '*' : ''}`;
     const setupGhosts = () => {
         ghosts?.dispose();
         ghosts = null;
         if (!state0.ghosts || !renderer.sf) return;
-        const runs = VEHICLES.map((v) => loadRun(courseId, v.id))
-            .filter((r) => r !== null)
+        const runs = VEHICLES.map((v) => ghostTracks.get(v.id))
+            .filter((r) => r !== undefined)
             .map((run) => ({ run, label: ghostLabel(run.vehicle, run.frames, run.tune) }));
         if (!runs.length) return;
         ghosts = new CompareGhosts(runs);
         renderer.scene.add(ghosts.group);
     };
+    /** Simulates run files into ghosts, in a worker (made on first use). */
+    let ghostSim: GhostSim | null = null;
+    const ghostSimulator = () =>
+        (ghostSim ??= new GhostSim({ kcl: course.files.get('course.kcl')!, kmp: course.files.get('course.kmp')!, meta: rulesCourse!, vehicles: vehicleData }));
+    // The stored best runs: their ghosts are simulated from the files and join the race when ready.
+    dropPoseGhosts();
+    void loadRuns(courseId, VEHICLES.map((v) => v.id)).then((runs) => {
+        for (const r of runs) {
+            if (bestRuns.has(r.vehicle) || !rulesCourse) continue;
+            bestRuns.set(r.vehicle, r);
+            ghostSimulator()
+                .track(r.file, r.tune)
+                .then((t) => {
+                    if (bestRuns.get(r.vehicle) !== r) return;
+                    ghostTracks.set(r.vehicle, { vehicle: r.vehicle, frames: r.frames, stride: t.stride, samples: t.samples, splits: r.splits, tune: r.sig, date: r.date });
+                    setupGhosts();
+                })
+                .catch((e) => console.warn(`${r.vehicle} ghost not simulated`, e));
+        }
+    });
 
     const applySettings = (s: typeof state0) => {
         input.setScheme(s.scheme);
@@ -203,13 +255,12 @@ async function main(): Promise<void> {
         sim.skipToCountdown();
         recorder.reset();
         liveTuned = false;
-        splitEntry = {};
-        splitSection = '';
+        input.usedGamepad = false;
         setupGhosts();
         renderer.sf?.items?.reset();
         renderer.sf?.items?.setKind(pickupKindFor(vehicle));
         sfHud?.resetSection();
-        lastStation = 0;
+        hudTrack?.reset();
         prevS = -1;
         sLaps = 0;
         finishFrame = null;
@@ -220,14 +271,8 @@ async function main(): Promise<void> {
         input.recenterMouse();
     };
 
-    const leaderboard = Leaderboard.enabled() ? new Leaderboard() : null;
     const menu = new Menu(state0, {
         onChange: applySettings,
-        leaderboard: leaderboard ?? undefined,
-        bestFor: (v) => {
-            const b = bests[bestKey(courseId, v)];
-            return b !== undefined ? formatFrames(b) : null;
-        },
         statsFor,
         onStart: async (s) => {
             audio.unlock();
@@ -235,9 +280,7 @@ async function main(): Promise<void> {
             // The San Francisco scenery streams in after the menu shows: wait for it.
             const waitSf = async () => {
                 if (!renderer.sf) return;
-                const note = document.createElement('div');
-                note.className = 'loading';
-                note.textContent = 'Loading San Francisco…';
+                const note = loadingScreen('Loading San Francisco…');
                 document.body.appendChild(note);
                 await renderer.sf.ready;
                 note.remove();
@@ -250,7 +293,42 @@ async function main(): Promise<void> {
             if (s.scheme === 'mouse') void canvas.requestPointerLock();
         },
     });
-    menu.open();
+    // The way in: the vehicle and scheme picked there, then the race.
+    late.vehicle = (id) => {
+        menu.set('vehicle', id);
+        applyVehicle(id);
+    };
+    late.scheme = (id) => menu.set('scheme', id);
+    late.race = (id, scheme) => {
+        menu.set('vehicle', id);
+        menu.set('scheme', scheme);
+        menu.start();
+    };
+    onboarding.setFacts({ statsFor: (id) => statsFor(id, effectiveTune(state0, id)) });
+    // The leaderboard: the rivals' laps and your best in each vehicle (until the online board).
+    const yourLaps = (): BoardEntry[] =>
+        VEHICLES.flatMap((v) => {
+            const b = bests[bestKey(courseId, v.id)];
+            return b !== undefined ? [{ name: 'You', vehicle: v.id, frames: b, you: true }] : [];
+        });
+    // The online board's top times join them (with SFK_API: leaderboard/).
+    let rivalLaps: BoardEntry[] = [];
+    let onlineLaps: BoardEntry[] = [];
+    const showBoard = () => onboarding.setBoard([...rivalLaps, ...onlineLaps, ...yourLaps()]);
+    showBoard();
+    void loadDataJson<{ rivals: RivalInfo[] }>(`${COURSE_DIR}/rivals.json`)
+        .then(({ rivals }) => {
+            rivalLaps = rivals.map((r) => ({ name: r.name, vehicle: r.vehicle, frames: r.finishFrame - RACE_START }));
+            showBoard();
+        })
+        .catch(() => {});
+    const online = OnlineBoard.enabled() ? new OnlineBoard() : null;
+    if (online) {
+        online.onRows = (rows) => {
+            onlineLaps = rows.map((r) => ({ name: r.name, vehicle: r.vehicle, frames: (r.timeMs * 59.94) / 1000 }));
+            showBoard();
+        };
+    }
 
     // Dev tuning (dev tools only): stat adjustments applied to the running race, no restart.
     const devTuning = DEV_TOOLS
@@ -278,6 +356,8 @@ async function main(): Promise<void> {
         : null;
 
     window.addEventListener('keydown', (e) => {
+        // (The way in handles its own keys.)
+        if (onboarding.isOpen()) return;
         if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
         if (e.code === 'Enter' && menu.isOpen()) {
             e.preventDefault();
@@ -294,47 +374,16 @@ async function main(): Promise<void> {
         }
     });
 
-    /** Nearest centerline station to the kart (windowed search from the last one). */
-    let lastStation = 0;
+    /** The kart's course S for the HUD (and the nearest centerline station: hudTrack.station). */
+    const hudTrack = course.meta?.centerline ? new CourseTracker(course.meta as unknown as SfHudMeta) : null;
     let prevS = -1;
     let sLaps = 0;
     let finishFrame: number | null = null;
     const fwd = new THREE.Vector3();
     const updateSfHud = (view: ReturnType<Sim['view']>) => {
         const meta = course.meta as unknown as SfHudMeta;
-        const cl = meta.centerline;
         const p = view.kart.pos;
-        let best = lastStation;
-        let bd = Infinity;
-        const scan = (i: number) => {
-            const c = cl[(i + cl.length) % cl.length]!;
-            const d = (c.pos[0] - p.x) ** 2 + (c.pos[2] - p.z) ** 2 + ((c.pos[1] - p.y) * 3) ** 2;
-            if (d < bd) {
-                bd = d;
-                best = (i + cl.length) % cl.length;
-            }
-        };
-        for (let k = -40; k <= 40; ++k) scan(lastStation + k);
-        if (bd > 1600 ** 2) for (let i = 0; i < cl.length; ++i) scan(i);
-        lastStation = best;
-        // Continuous S: project onto the segment to the next / previous station.
-        let S = cl[best]!.s;
-        {
-            const a = cl[best]!;
-            for (const nb of [cl[(best + 1) % cl.length]!, cl[(best - 1 + cl.length) % cl.length]!]) {
-                const dx = nb.pos[0] - a.pos[0];
-                const dz = nb.pos[2] - a.pos[2];
-                const L2 = dx * dx + dz * dz;
-                const t = L2 > 0 ? ((p.x - a.pos[0]) * dx + (p.z - a.pos[2]) * dz) / L2 : 0;
-                if (t > 0 && t <= 1) {
-                    let ds = nb.s - a.s;
-                    if (ds < -meta.length / 2) ds += meta.length;
-                    if (ds > meta.length / 2) ds -= meta.length;
-                    S = (a.s + t * ds + meta.length) % meta.length;
-                    break;
-                }
-            }
-        }
+        const S = hudTrack!.update(p);
         const startS = meta.start?.s ?? 0;
         // Unwrap across the start of the centerline (only there: S = 0 is near the finish line).
         const nearWrap = (x: number) => x < 30000 || x > meta.length - 30000;
@@ -358,11 +407,6 @@ async function main(): Promise<void> {
         );
         sfHud!.setPosition(rivals && view.hud.raceFrames !== null ? rivals.position(dist, sim.frame(), finishFrame) : null, (rivals?.count() ?? 0) + 1);
         const sec = Object.entries(meta.segments).find(([, r]) => S >= r[0] && S < r[1])?.[0] ?? '';
-        // Section splits: the race frame the kart first entered each section.
-        if (view.hud.raceFrames !== null && finishFrame === null && sec && sec !== splitSection) {
-            splitSection = sec;
-            splitEntry[sec] ??= view.hud.raceFrames;
-        }
         sfMusic.intensity = ['palace', 'marina'].includes(sec) ? 2 : ['bridge_nb', 'vista', 'bridge_sb', 'parkway'].includes(sec) ? 1 : 0;
     };
 
@@ -375,29 +419,52 @@ async function main(): Promise<void> {
         finishFrame = sim.frame();
         const rivals = renderer.sf?.rivals;
         const key = bestKey(courseId, vehicle);
-        // Section durations from the entry frames (in lap order).
-        const entries = Object.entries(splitEntry).sort((a, b) => a[1] - b[1]);
+        // Section durations from the frames the sim saw the kart enter each (in lap order; the
+        // last one runs to the finish).
+        const names = Object.keys(rulesCourse?.segments ?? {});
+        const entries = sim.splits().flatMap((f, i) => (f > 0 ? [[names[i]!, f] as const] : []));
         const splits: Record<string, number> = {};
-        entries.forEach(([k, f], i) => (splits[k] = (entries[i + 1]?.[1] ?? total) - f));
-        const run = recorder.run(vehicle, total, splits, raceTune);
-        const prevBest = loadRun(courseId, vehicle);
-        // (Ghost replays count only when asked to, from the debug hook.)
-        const newBest = total > 0 && !liveTuned && (!sim.isReplay() || saveReplays) && (!prevBest || total < prevBest.frames || prevBest.tune !== raceTune);
-        if (newBest) saveRun(courseId, run);
-        // The leaderboard: the run itself (its engine inputs up to this frame), if it raced the stock vehicle.
-        const timeMs = finishTimeMs();
-        if (leaderboard && !liveTuned && !sim.isReplay() && timeMs !== null && raceTune.startsWith(`${JSON.stringify(STOCK_TUNE)}|`)) {
-            void leaderboard.finished(vehicle, timeMs, encodeRun({ vehicle, rules: RULES, timeMs, inputs: sim.recording.slice() }));
+        entries.forEach(([k, f], i) => (splits[k] = (entries[i + 1]?.[1] ?? entries[0]![1] + total) - f));
+        // The run as a run file: its pads, what they were raced under, the claimed finish and splits.
+        if (sim.recording.length) {
+            const device = input.usedGamepad ? InputDevice.Gamepad : input.scheme().mouseSteer ? InputDevice.Mouse : InputDevice.Keyboard;
+            const tuned = liveTuned || !isStock(effectiveTune(state0, vehicle));
+            lastRun = encodeRun({ rulesHash: RULES_HASH, vehicle, device, flags: tuned ? RUN_TUNED : 0, finishFrame: sim.finishFrame ?? finishFrame, splits: sim.splits(), pads: sim.recording.slice() });
+            lastRun.catch((e) => console.warn('run file not written', e));
+            // The online board: posted if it beats your time there (the server races it again).
+            const ms = sim.raceMs();
+            if (online && !tuned && !sim.isReplay() && ms !== null) void online.finished(vehicle, ms, lastRun);
         }
-        if (total > 0 && !liveTuned && (bests[key] === undefined || total < bests[key]!)) {
+        const prevBest = bestRuns.get(vehicle);
+        // (Ghost replays count only when asked to, from the debug hook.)
+        const newBest = total > 0 && !liveTuned && (!sim.isReplay() || saveReplays) && (!prevBest || total < prevBest.frames || prevBest.sig !== raceTune);
+        if (newBest) {
+            // The ghost from this run's poses right away; the run itself kept as its run file.
+            ghostTracks.set(vehicle, recorder.run(vehicle, total, splits, raceTune));
+            bestRuns.delete(vehicle);
+            const id = vehicle;
+            const at = sim.finishFrame;
+            const keep = { course: courseId, vehicle: id, frames: total, splits, sig: raceTune, tune: effectiveTune(state0, id), date: Date.now() };
+            void lastRun?.then((file) => {
+                const r: StoredRun = { ...keep, file };
+                bestRuns.set(id, r);
+                void storeRun(r);
+                // Dev check: the run simulated from its file (in another JS realm) finishes the same.
+                if (DEV_TOOLS && rulesCourse) void ghostSimulator().track(file, r.tune).then((t) => {
+                    if (t.finishFrame !== at) console.warn(`run replay diverged: finishes on frame ${t.finishFrame}, not ${at}`);
+                    else console.info(`run replay checked: finishes on frame ${at}`);
+                });
+            });
+        }
+        if (total > 0 && !liveTuned && (!sim.isReplay() || saveReplays) && (bests[key] === undefined || total < bests[key]!)) {
             bests[key] = total;
             localStorage.setItem(BEST_KEY, JSON.stringify(bests));
         }
         // Compare: this run and the best run of every vehicle.
         const cols: SplitColumn[] = [{ name: `This run`, color: vehicleDef(vehicle).color, splits, total, current: true, note: vehicleDef(vehicle).name + (liveTuned ? ' · tuned mid-race, not kept' : newBest ? ' · new best' : '') }];
         for (const v of VEHICLES) {
-            const r = v.id === vehicle && newBest ? null : loadRun(courseId, v.id);
-            if (r) cols.push({ name: `${v.name} best`, color: v.color, splits: r.splits, total: r.frames, note: r.tune !== runSig(v.id) ? 'other tune/drift' : undefined });
+            const r = v.id === vehicle && newBest ? null : bestRuns.get(v.id);
+            if (r) cols.push({ name: `${v.name} best`, color: v.color, splits: r.splits, total: r.frames, note: r.sig !== runSig(v.id) ? 'other tune/drift' : undefined });
         }
         const results = sfHud && rivals ? [...rivals.finishes(), { name: `You · ${vehicleDef(vehicle).name}`, color: '#ffcc00', frames: total, you: true }] : null;
         // The board comes up after FINISH! (finishCamera).
@@ -430,7 +497,7 @@ async function main(): Promise<void> {
         if (!shot || !renderer.sf) return null;
         const t = Math.max(0, simTime - shot.t0);
         if (shot.results && t > RESULTS_SEC) {
-            sfHud?.showResults(shot.results, formatFrames, shot.compare, leaderboard?.status);
+            sfHud?.showResults(shot.results, formatFrames, shot.compare, online?.status);
             shot.results = null;
         }
         const k = view.kart.pos;
@@ -443,7 +510,7 @@ async function main(): Promise<void> {
             shot.h0 = c.pos.y - k.y;
             shot.tgt0.copy(c.target).sub(k);
             // Ahead of the kart, a little to the side with more road (the kart may be on its way into a wall).
-            const st = (course.meta as unknown as { centerline: { pos: number[]; right: number[] }[] }).centerline[lastStation];
+            const st = (course.meta as unknown as { centerline: { pos: number[]; right: number[] }[] }).centerline[hudTrack?.station ?? 0];
             const onRight = st ? (k.x - st.pos[0]!) * st.right[0]! + (k.z - st.pos[2]!) * st.right[2]! > 0 : true;
             let d = Math.atan2(fwd.x, fwd.z) + (onRight ? 0.55 : -0.55) - shot.ang0;
             d = ((d + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
@@ -476,7 +543,7 @@ async function main(): Promise<void> {
         // Forward speed (units per frame; negative when reversing).
         const speed = (p.x - autoPrev.x) * f.x + (p.z - autoPrev.z) * f.z;
         autoPrev.copy(p);
-        let j = lastStation;
+        let j = hudTrack?.station ?? 0;
         for (let ahead = 0, n = 0; ahead < 1800 && n < cl.length; ++n) {
             const k = (j + 1) % cl.length;
             ahead += Math.hypot(cl[k]!.pos[0] - cl[j]!.pos[0], cl[k]!.pos[2] - cl[j]!.pos[2]);
@@ -490,18 +557,20 @@ async function main(): Promise<void> {
         return { buttons, stickXRaw: Math.round(Math.max(-1, Math.min(1, -4 * alpha)) * 7) + 7, stickYRaw: 7, trick: 0 };
     };
 
+    // The speed-up pickups' bursts (the sim collects them and stores the speed-ups: rules/course.ts).
+    const showPickups = () => {
+        if (renderer.sf?.items && sim.racing()) renderer.sf.items.check(sim.kartPos(), sim.frame());
+    };
+
     const stepOnce = () => {
         sim.step(finishShot && course.meta ? finishPad(finishShot) : input.sample());
         simTime += FRAME_SEC;
         recorder.push(sim.frame(), sim.kartPos(), sim.kartRot());
-        // Speed-up pickups (San Francisco): drive through one for an instant boost.
-        if (renderer.sf?.items && sim.racing() && renderer.sf.items.check(sim.kartPos(), sim.frame())) {
-            sim.pickupBoost();
-            sim.events.push({ type: 'itemBox' });
-        }
+        showPickups();
         for (const ev of sim.events) {
             audio.event(ev);
             if (ev.type === 'finish') onFinish();
+            if (ev.type === 'itemBox') hud.pickupFlash(ev.stored);
             if (renderer.sf) {
                 if (ev.type === 'go') sfMusic.play();
                 else if (ev.type === 'finish') sfMusic.stop(2.5);
@@ -513,7 +582,7 @@ async function main(): Promise<void> {
     const frame = (now: number) => {
         const dt = Math.min(0.25, (now - last) / 1000);
         last = now;
-        const inMenu = menu.isOpen();
+        const inMenu = menu.isOpen() || onboarding.isOpen();
         input.enabled = !inMenu;
 
         if (!inMenu) {
@@ -559,7 +628,10 @@ async function main(): Promise<void> {
         renderer.scale.update(dt * 1000, inMenu || paused ? ScaleMoment.Idle : sim.racing() ? ScaleMoment.Racing : ScaleMoment.Calm);
         renderer.frame = sim.frame();
         ghosts?.update(sim.frame(), simTime, (freeCam ?? view.camera).pos);
-        renderer.render(view.kart, freeCam ?? finishCamera(view) ?? view.camera, simTime);
+        const title = titleSince !== null && renderer.sf ? titleShot((now - titleSince) / 1000) : null;
+        const veil = title && sceneReady ? title.veil : 0;
+        if (Math.abs(veil - shownVeil) > 0.004) document.documentElement.style.setProperty('--veil', (shownVeil = veil).toFixed(3));
+        renderer.render(view.kart, freeCam ?? title?.camera ?? finishCamera(view) ?? view.camera, simTime);
         if (sfHud && course.meta) updateSfHud(view);
         hud.update(
             {
@@ -572,9 +644,7 @@ async function main(): Promise<void> {
             {
                 mouseStick: input.mouseStickValue(),
                 pointerLocked: input.pointerLocked(),
-                itemKey: input.scheme().help.find(([, a]) => a === 'speed-up')?.[0] ?? 'item',
-                courseName: courseName(),
-                best: bests[bestKey(courseId, vehicle)] ?? finishedFrames,
+                itemKey: input.scheme().quick.find(([, a]) => a === 'Speed-up')?.[0] ?? 'E',
             },
         );
 
@@ -587,19 +657,20 @@ async function main(): Promise<void> {
         sim,
         menu,
         renderer,
-        step(n: number, pad: Partial<ReturnType<InputManager['sample']>> = {}) {
+        /** Steps n frames with `pad` (pickups, recording and the finish as in play); `draw`: render the result. */
+        step(n: number, pad: Partial<ReturnType<InputManager['sample']>> = {}, draw = true) {
             paused = true;
+            onboarding.close();
             if (menu.isOpen()) menu.close();
             for (let i = 0; i < n; ++i) {
                 sim.step({ buttons: 0, stickXRaw: 7, stickYRaw: 7, trick: 0, ...pad });
                 simTime += FRAME_SEC;
+                showPickups();
                 // The finish still counts (results board, final place; playthrough recordings).
                 if (sim.events.some((ev) => ev.type === 'finish')) onFinish();
                 sim.events.length = 0;
-                // Speed-up pickups boost as in play (ghost replays too: the same boost on the same
-                // frame, so a recorded run replays in sync).
-                if (renderer.sf?.items && sim.racing() && renderer.sf.items.check(sim.kartPos(), sim.frame())) sim.pickupBoost();
             }
+            if (!draw) return sim.frame();
             const view = sim.view(1);
             renderer.frame = sim.frame();
             renderer.render(view.kart, finishCamera(view) ?? view.camera, simTime);
@@ -608,6 +679,7 @@ async function main(): Promise<void> {
         /** Runs n game frames through the full race loop (events, recording, splits) without drawing. */
         fastForward(n: number) {
             paused = true;
+            onboarding.close();
             if (menu.isOpen()) menu.close();
             for (let i = 0; i < n; ++i) {
                 stepOnce();
@@ -618,6 +690,29 @@ async function main(): Promise<void> {
             ghosts?.update(sim.frame(), simTime, view.camera.pos);
             renderer.render(view.kart, view.camera, simTime);
             return sim.frame();
+        },
+        /** The last finished run's run file (rules/runfile.ts), base64; null before one finishes. */
+        async lastRun() {
+            return lastRun ? toBase64(await lastRun) : null;
+        },
+        /**
+         * Watches a run file (base64) through the live path (Sim.startRun): the run's vehicle with its
+         * stock numbers and its pads from the start. watch(null) returns to live play.
+         */
+        async watch(file: string | null) {
+            finishShot = null;
+            finishFrame = null;
+            if (file) {
+                const run = await decodeRun(fromBase64(file));
+                applyVehicle(run.vehicle);
+                sim.setKartParam(kartParamFor(run.vehicle, STOCK_TUNE));
+                sim.startRun(run.pads);
+            } else {
+                sim.stopReplay();
+                applyVehicle(state0.vehicle);
+            }
+            restart();
+            return 'ok';
         },
         /** Keep ghost replays' finishes as the vehicle's best run (to seed comparisons from bot laps). */
         saveReplays(on: boolean) {
@@ -640,6 +735,7 @@ async function main(): Promise<void> {
         /** Renders one frame from a free camera (screenshots of any part of the course). */
         look(pos: [number, number, number] | null, target: [number, number, number] = [0, 0, 0], fov = 60) {
             paused = true;
+            onboarding.close();
             if (menu.isOpen()) menu.close();
             freeCam = pos ? { pos: new THREE.Vector3(...pos), target: new THREE.Vector3(...target), fov } : null;
             const view = sim.view(1);
@@ -650,5 +746,8 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
     console.error(err);
-    document.body.innerHTML = `<pre style="color:#f88;padding:20px">${String(err?.stack ?? err)}</pre>`;
+    const pre = document.createElement('pre');
+    pre.className = 'fatal';
+    pre.textContent = String(err?.stack ?? err);
+    document.body.replaceChildren(pre);
 });

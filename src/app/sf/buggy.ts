@@ -1,5 +1,5 @@
 /**
- * The Tour Buggy: a bright yellow open two-seater on three wheels (one steering wheel up front, two
+ * The Tour Kart: a bright yellow open two-seater on three wheels (one steering wheel up front, two
  * at the back under their own fenders) with a roll bar and a tour speaker. The driver is a tourist
  * in a bucket hat and sunglasses who leans into the turns (the hat bounces on jumps); the passenger
  * snaps photos on tricks. The turn signals blink while it slides, the tail lights brighten on the

@@ -45,7 +45,7 @@ export const TUNE_KNOBS: readonly { key: TuneKey; label: string; min: number; ma
     { key: 'miniTurbo', label: 'Mini-turbo', min: -10, max: 10, step: 1, help: 'Frames of boost from a drift.' },
 ];
 
-function isStock(t: VehicleTune): boolean {
+export function isStock(t: VehicleTune): boolean {
     return (Object.keys(STOCK_TUNE) as TuneKey[]).every((k) => t[k] === STOCK_TUNE[k]);
 }
 

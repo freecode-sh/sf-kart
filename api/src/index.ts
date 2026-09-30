@@ -1,8 +1,8 @@
 /**
  * The SF Kart leaderboard API (a Cloudflare Worker at sfkart-api.freecode.sh; D1 for the boards, R2
  * for run files). Posting a time means posting the run itself: the Worker races its inputs again
- * with the game's own code (src/app/run/verify.ts) and records the time only if it finishes in
- * exactly the time claimed.
+ * through the game's own live path (src/app/rules/resim.ts checkRun) and records the time only if it
+ * finishes on the frame, with the splits, it claims.
  *
  *   GET    /board?vehicle=all|ebike|robotaxi|buggy   the top 50 (cached 30 s)
  *   GET    /me                                        your board name and bests      (signed in)
@@ -12,12 +12,12 @@
  *   GET    /runs/:id                                  a run file (for replays)
  *   POST   /admin/ban?name=… | /admin/unban?name=…    (Bearer ADMIN_KEY)
  *
- * Signed in = a freecode token (auth.ts). One board per rules id (a season, RULES_ID).
+ * Signed in = a freecode token (auth.ts). One board per rules hash (a season, RULES_ID).
  */
 
 import type { D1Database, R2Bucket, RateLimit } from '@cloudflare/workers-types';
-import { decodeRun, runId } from '../../src/app/run/runFile';
-import { verifyRun } from '../../src/app/run/verify';
+import { checkRun } from '../../src/app/rules/resim';
+import { decodeRun, RUN_TUNED } from '../../src/app/rules/runfile';
 import { VEHICLES } from '../../src/app/vehicles';
 import { authenticate, type AuthEnv, type User } from './auth';
 import { cleanName, suggestName } from './names';
@@ -181,13 +181,14 @@ async function postRun(req: Request, user: User, env: Env): Promise<Response> {
     const run = await decodeRun(bytes).catch(() => {
         throw new HttpError(400, 'bad_run', 'That isn’t a run file');
     });
-    if (run.rules !== env.RULES_ID) throw new HttpError(409, 'stale', 'A new version of SF Kart is out: reload the page to post times');
-    const rules = await loadRules(env);
-    const v = verifyRun(rules, run.vehicle, run.inputs);
-    if (!v.ok || v.timeMs !== run.timeMs) {
-        console.warn(`rejected run from ${user.id}: claimed ${run.timeMs} ms, raced ${v.timeMs} ms, finished ${v.ok}`);
+    if (run.rulesHash !== env.RULES_ID) throw new HttpError(409, 'stale', 'A new version of SF Kart is out: reload the page to post times');
+    if (run.flags & RUN_TUNED) throw new HttpError(422, 'rejected', 'Runs raced with dev tuning aren’t ranked');
+    const check = await checkRun(run, await loadRules(env));
+    if (!check.ok || check.raceMs === null) {
+        console.warn(`rejected run from ${user.id}: ${check.errors.join('; ')}`);
         throw new HttpError(422, 'rejected', 'That run didn’t check out');
     }
+    const v = { timeMs: check.raceMs, frames: check.frames };
 
     const id = await runId(bytes);
     const now = Date.now();
@@ -231,6 +232,12 @@ async function postRun(req: Request, user: User, env: Env): Promise<Response> {
         rank: { vehicle: await rankOf(env, run.vehicle, mine.timeMs, mine.at), all: await rankOf(env, ANY, all.timeMs, all.at) },
         bestMs: { vehicle: mine.timeMs, all: all.timeMs },
     });
+}
+
+/** A run file's id: the first 16 hex digits of its SHA-256. */
+async function runId(bytes: Uint8Array): Promise<string> {
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>));
+    return [...h.subarray(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function runFile(id: string, env: Env): Promise<Response> {

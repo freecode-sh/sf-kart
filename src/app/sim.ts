@@ -4,13 +4,14 @@
  */
 
 import * as THREE from 'three';
+import { Course } from '../Common';
 import { KartObjectManager } from '../game/kart/KartObjectManager';
 import { DriftState } from '../game/kart/KartMove';
 import type { KartParam } from '../game/kart/KartParam';
 import { eStatus } from '../game/kart/Status';
 import { KartCamera } from '../game/render/KartCamera';
 import { RaceSession, type RaceSessionScenario } from '../game/scene/RaceSession';
-import { KPadHostController } from '../game/system/KPadController';
+import { KPadHostController, type Trick } from '../game/system/KPadController';
 import { RaceManager, Stage } from '../game/system/RaceManager';
 import { ItemDirector } from '../game/item/ItemDirector';
 import type { AudioFrame, SimEvent } from './audio';
@@ -19,11 +20,14 @@ import type { RawPadState } from './input';
 import { BUTTON_ACCELERATE, BUTTON_BRAKE, BUTTON_DRIFT, BUTTON_ITEM, TrickDir } from './input';
 import { EasyDrift } from './easyDrift';
 import { startRace } from './raceStart';
-import { COURSE_SLOT, finishTimeMs, isGoFrame, raceFiles, stepRace, type EngineInput } from './run/race';
 import { DRIVER_SLOT, vehicleSlot } from './vehicleData';
 import type { CameraState, KartVisualState } from './renderer';
+import type { CourseRules } from './rules/course';
+import { storeSpeedUp } from './rules/pickups';
 
 const MT_CHARGE_MAX = 270;
+/** The engine's longest start boost (frames); everyone gets it at GO. */
+const START_BOOST_FRAMES = 70;
 /** Countdown frames left when "3" appears. */
 const COUNTDOWN_SHOWN = 181;
 /** Frames of a trick's flourish (the vehicle's own trick animation, see renderer.ts). */
@@ -60,8 +64,11 @@ export class Sim {
     private prevButtons = 0;
     private prev: Snapshot | null = null;
     private cur: Snapshot | null = null;
-    /** The current run's engine inputs, one per frame stepped (live play only): a run file's body (run/runFile.ts). */
-    readonly recording: EngineInput[] = [];
+    /**
+     * The run's inputs: every pad a live step() took since start(), as given (before the tricks and
+     * the drift layer). Replayed through step() from start(), they drive the same run (runfile.ts).
+     */
+    readonly recording: RawPadState[] = [];
     /** Events produced by the most recent step() calls; drained by the app. */
     readonly events: SimEvent[] = [];
     private lastPad: RawPadState = { buttons: 0, stickXRaw: 7, stickYRaw: 7, trick: 0 };
@@ -71,7 +78,7 @@ export class Sim {
     private prevCountdown = 999;
     private prevDriftState = DriftState.NotDrifting;
     private airFrames = 0;
-    /** Camera FOV (degrees), as the engine's camera eases it; NaN until the first frame. */
+    /** Camera FOV (degrees), eased like the real game's camera; NaN until the first frame. */
     private fov = Number.NaN;
     private prevFov = Number.NaN;
     private prevSpeed = 0;
@@ -116,36 +123,74 @@ export class Sim {
     /** Laps to finish (the app sets the course's own count before starting). */
     laps = 3;
 
+    /** Course slot the race runs in (generated courses use the engine's default slot, like their ghosts). */
+    private readonly slot = Course.Luigi_Circuit;
+
     constructor(
         private readonly common: Map<string, Uint8Array>,
         private readonly course: Map<string, Uint8Array>,
     ) {}
 
+    /** The course's pickups and splits (rules/course.ts), run after every frame; null: none. */
+    private rules: CourseRules | null = null;
+
+    setRules(rules: CourseRules | null): void {
+        this.rules = rules;
+    }
+
+    /** Session frame of the finish (null: not finished). */
+    finishFrame: number | null = null;
+
+    /** The frame the kart first entered each course section (lap order; 0 = not entered). */
+    splits(): number[] {
+        return this.rules ? [...this.rules.splits.entry] : [];
+    }
+
     /** Ghost replay (RKG) instead of live input; start()/startGhost() switch modes. */
     private ghost: Uint8Array | null = null;
+    /** Run replay: a run's recorded pads, taken by step() in place of the ones it's given. */
+    private replayPads: readonly RawPadState[] | null = null;
 
     /** Replays an RKG ghost on the current course (its course/character/vehicle come from the ghost). */
     startGhost(rkg: Uint8Array): void {
+        this.replayPads = null;
         this.ghost = rkg;
         this.start();
     }
 
+    /**
+     * Replays a run's pads (sim.recording, or a run file's) through the live path from the start:
+     * the same drift layer, tricks, start boost and pickups, so the run plays out exactly as it was
+     * driven. Once they run out, step() takes the pads it's given again. Set the run's vehicle first.
+     */
+    startRun(pads: readonly RawPadState[]): void {
+        this.ghost = null;
+        this.replayPads = pads;
+        this.start();
+    }
+
     isReplay(): boolean {
-        return this.ghost !== null;
+        return this.ghost !== null || this.replayPads !== null;
     }
 
     stopReplay(): void {
         this.ghost = null;
+        this.replayPads = null;
     }
 
     start(): void {
-        const files = raceFiles(this.common, this.course, this.kartParam);
+        const core = new Map<string, Uint8Array>();
+        for (const [k, v] of this.common) core.set(k.startsWith('bsp/') ? `/${k}` : k, v);
+        if (this.kartParam) core.set('kartParam.bin', this.kartParam);
+        const files = { core, course: this.course };
         const scenario: RaceSessionScenario = this.ghost
             ? { type: 'ghost', rkg: this.ghost }
-            : { type: 'local', course: COURSE_SLOT, character: this.character, vehicle: this.vehicle, driftIsAuto: false };
+            : { type: 'local', course: this.slot, character: this.character, vehicle: this.vehicle, driftIsAuto: false };
         RaceManager.lapsToFinish = this.laps;
         startRace(this.session, files, scenario);
         this.drift.reset();
+        this.rules?.reset();
+        this.finishFrame = null;
         this.prevButtons = 0;
         this.recording.length = 0;
         this.events.length = 0;
@@ -177,9 +222,13 @@ export class Sim {
             this.cur = this.capture();
             this.detectEvents();
             this.updateVisuals();
+            this.applyRules();
             return;
         }
-        // Brake and drift both drive the engine's brake button; the controller layer derives the drift
+        if (this.replayPads) pad = this.replayPads[this.recording.length] ?? pad;
+        this.recording.push({ ...pad });
+        const host = this.session.hostController();
+        // B and R both drive the game's "brake" button; the controller layer derives the drift
         // (hop) bit from it being pressed while accelerating. The easy-drift layer decides when it's held.
         const accel = (pad.buttons & BUTTON_ACCELERATE) !== 0;
         // The hop button tricks off ramps (hopTrick); on a ramp it doesn't hop.
@@ -187,19 +236,40 @@ export class Sim {
         let brake = (pad.buttons & BUTTON_BRAKE) !== 0 || ((pad.buttons & BUTTON_DRIFT) !== 0 && !this.hopSuppressed);
         brake = this.drift.update(brake, accel, (pad.stickXRaw - 7) / 7, this.driftKart());
         // Start boost: everyone gets one. On the GO frame the engine doesn't see the accelerator (so
-        // no charge-timed boost or burnout of its own) and the best start boost is applied (stepRace).
-        const buttons = KPadHostController.MakeGhostButtons(accel && !isGoFrame(), brake, (pad.buttons & BUTTON_ITEM) !== 0, this.prevButtons);
+        // no charge-timed boost or burnout of its own) and the best start boost is applied.
+        const rm = RaceManager.Instance()!;
+        const goFrame = rm.stage() === Stage.Countdown && rm.getCountdownTimer() === 1;
+        const buttons = KPadHostController.MakeGhostButtons(accel && !goFrame, brake, (pad.buttons & BUTTON_ITEM) !== 0, this.prevButtons);
         this.prevButtons = buttons;
         let trick = this.trickFor(pad);
         if (trick === TrickDir.None) trick = hopTrick;
-        const input: EngineInput = { buttons, stickX: pad.stickXRaw, stickY: pad.stickYRaw, trick };
-        this.recording.push(input);
-        stepRace(this.session, input);
+        host.setRawInputs(buttons, pad.stickXRaw, pad.stickYRaw, trick as number as Trick);
+
+        this.session.step();
+        if (goFrame) this.kart().move().applyStartBoost(START_BOOST_FRAMES);
         this.lastPad = pad;
         this.prev = this.cur;
         this.cur = this.capture();
         this.detectEvents();
         this.updateVisuals();
+        this.applyRules();
+    }
+
+    /**
+     * The app's rules after a frame (rules/course.ts), from the kart's position only: a speed-up
+     * pickup touched stores one more speed-up for the item button (storeSpeedUp, up to three), and
+     * the section splits. In live play and replays alike, so replays stay in sync.
+     */
+    private applyRules(): void {
+        const r = this.rules;
+        if (!r) return;
+        const racing = this.racing();
+        const f = this.session.frame();
+        if (racing && r.pickups.check(this.cur!.pos, f) > 0) {
+            const stored = storeSpeedUp(ItemDirector.Instance()!.kartItem(0).inventory());
+            this.events.push({ type: 'itemBox', stored });
+        }
+        r.splits.update(this.cur!.pos, f, racing);
     }
 
     /**
@@ -265,8 +335,8 @@ export class Sim {
      * drifts; holding it through the landing while steering drifts, like any held drift button).
      * Tricks only ever go out in the air, so a hop press never starts a bike's wheelie.
      *
-     * Deterministic: a function of the raw inputs and the kart state. The trick it sends is what
-     * sim.recording stores (the engine input), so a recorded run replays without this layer.
+     * Deterministic: a function of the raw inputs and the kart state, so replaying the raw pads
+     * (sim.recording) sends the same tricks.
      */
     private hopTrick(pad: RawPadState): TrickDir {
         const held = (pad.buttons & BUTTON_DRIFT) !== 0;
@@ -276,7 +346,7 @@ export class Sim {
         // The held-back hop comes back on release, or once in the air (where a press can't hop).
         if (!held || this.kart().status().offBit(eStatus.TouchingGround)) this.hopSuppressed = false;
         if (pad.trick !== TrickDir.None) {
-            // A trick input of its own (the trick key, the d-pad, a replayed recording).
+            // A trick input of its own (the trick key, the d-pad).
             this.trickArmed = false;
             return TrickDir.None;
         }
@@ -294,8 +364,7 @@ export class Sim {
                 return TrickDir.None;
             }
             this.trickArmed = false;
-            // Any steering makes it a side trick (the same rule as trickFor, so a replayed recording
-            // sends the same trick).
+            // Any steering makes it a side trick (the same rule as trickFor).
             if (pad.stickXRaw !== 7) return pad.stickXRaw < 7 ? TrickDir.Left : TrickDir.Right;
             return pad.stickYRaw <= 3 ? TrickDir.Down : TrickDir.Up;
         }
@@ -358,7 +427,10 @@ export class Sim {
             this.prevCountdown = left;
         }
         if (stage === Stage.Race && this.prevStage === Stage.Countdown) ev.push({ type: 'go' });
-        if (stage >= Stage.FinishLocal && this.prevStage < Stage.FinishLocal) ev.push({ type: 'finish' });
+        if (stage >= Stage.FinishLocal && this.prevStage < Stage.FinishLocal) {
+            ev.push({ type: 'finish' });
+            this.finishFrame ??= this.session.frame();
+        }
         this.prevStage = stage;
 
         const lap = rm.player().currentLap();
@@ -435,17 +507,15 @@ export class Sim {
         return this.cur!.rot;
     }
 
-    /** Race stage (for app-side gameplay such as the speed-up pickups). */
+    /** Race stage (for app-side gameplay such as item boxes). */
     racing(): boolean {
         return RaceManager.Instance()!.stage() === Stage.Race;
     }
 
-    /**
-     * Speed-up pickup (app-side): an instant boost, as strong as a stored speed-up. Applied after a frame from the
-     * kart's position only, in live play and ghost replays alike, so replays stay in sync.
-     */
-    pickupBoost(): void {
-        this.kart().move().activateMushroom();
+    /** The race time the engine timed at the finish (ms; null: not finished). */
+    raceMs(): number | null {
+        const t = RaceManager.Instance()!.player().raceTimer();
+        return this.finishFrame !== null && t.valid ? (t.min * 60 + t.sec) * 1000 + t.mil : null;
     }
 
     /** The kart's forward direction (horizontal, unit). */
@@ -557,6 +627,7 @@ export class Sim {
         } catch {
             speedUps = 0;
         }
+
 
         const hud: SimView['hud'] = {
             raceFrames,
