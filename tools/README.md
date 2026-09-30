@@ -6,6 +6,7 @@ Offline toolchain: the course builder, the bot, the San Francisco data bakes and
 tools/
   brandLint.ts       no game or brand names in the repository (run before committing)
   brand/icons.sh     favicon.svg (the lap, favicon.ts) and its PNGs (icons.ts) → public/
+  brand/og.ts        the link preview card from the title screen → public/og-v2.jpg
   verify.ts          verifies a run file (SFKR): the rules hash, then re-simulates it and checks its finish and splits
   course/            course generator and bot
     build.ts         build courses → public/data/courses/<id>/
