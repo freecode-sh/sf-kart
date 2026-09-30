@@ -1,0 +1,2 @@
+# The leaderboard Worker (Cloudflare, api/deploy.ts): not Vercel functions.
+/api
