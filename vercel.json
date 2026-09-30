@@ -5,6 +5,7 @@
   "redirects": [{ "source": "/", "destination": "/sf-kart/", "permanent": false }],
   "rewrites": [
     { "source": "/sf-kart", "destination": "/index.html" },
+    { "source": "/sf-kart/", "destination": "/index.html" },
     { "source": "/sf-kart/:path*", "destination": "/:path*" }
   ],
   "headers": [

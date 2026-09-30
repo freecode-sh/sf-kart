@@ -6,3 +6,4 @@ dist/
 .env.local
 public/data/sf/debug/
 .wrangler/
+.vercel
