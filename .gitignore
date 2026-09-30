@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.context/
+*.log
+.DS_Store
+.env.local
+public/data/sf/debug/
+.wrangler/

@@ -1,0 +1,208 @@
+{
+  "about": [
+    "SF Kart vehicle data: everything the physics engine reads for each vehicle, packed into the engine's layouts at load time by src/app/vehicleData.ts.",
+    "Stats are final (no driver bonuses are added on top). Units are the engine's: distances in world units (60 per meter on the San Francisco course), speeds per frame at 59.94 fps."
+  ],
+  "version": 2,
+  "fields": {
+    "class": "\"bike\" or \"kart\": which physics the engine runs (bikes wheelie and lean; karts slide).",
+    "stats.body": "Body layout: \"kart\" (4 wheels), \"threeWheelKart\", \"bike\" (leans around the handlebar), \"bikeVehicleRelative\".",
+    "stats.driftType": "\"outsideKart\", \"outsideBike\" (slides outward) or \"inside\" (leans into the turn, bikes).",
+    "stats.weightClass": "\"light\", \"medium\" or \"heavy\": who wins a bump.",
+    "stats.weight": "Mass for bumps between vehicles (not gravity).",
+    "stats.bumpDeviation": "How much bumpy surfaces knock it sideways.",
+    "stats.topSpeed": "Base top speed (units per frame).",
+    "stats.steerSpeedKeep": "Fraction of speed kept at full steer (1 = no loss).",
+    "stats.tilt": "How far the body tilts on slopes and in turns.",
+    "stats.accel": "Acceleration curve: at standstill, then at each of accelSpeeds (fractions of top speed); beyond the last, the last value.",
+    "stats.accelSpeeds": "Speed fractions where the curve reaches the next accel value.",
+    "stats.driftAccel": "The acceleration curve while drifting.",
+    "stats.driftAccelSpeeds": "Its speed fraction.",
+    "stats.handlingManual": "Steering tightness outside drifts (manual drift controls).",
+    "stats.handlingAuto": "Same, automatic drift controls.",
+    "stats.handlingReactivity": "How quickly steering responds.",
+    "stats.driftManual": "Turning tightness while drifting (manual).",
+    "stats.driftAuto": "Same, automatic.",
+    "stats.driftReactivity": "How quickly steering responds in a drift.",
+    "stats.outsideDriftAngle": "Degrees sideways in an outside drift (0 for inside-drift bikes).",
+    "stats.outsideDriftAngleStep": "How fast it swings to that angle (degrees per frame).",
+    "stats.miniTurboFrames": "Mini-turbo boost length in frames (super mini-turbo: 3x).",
+    "stats.surfaceSpeed": "Speed multiplier per collision surface type (0 road, 1 slippery, 2-4 weak/normal/heavy offroad, ...).",
+    "stats.surfaceTurn": "Turning multiplier per surface type.",
+    "stats.maxSuspensionForce": "Cap on the upward force from the suspension on landings.",
+    "stats.megaSize": "Scale when grown to mega size.",
+    "stats.shrinkSize": "Scale when shrunk.",
+    "collision.rideHeight": "Height of the body origin above the ground at spawn.",
+    "collision.hitboxes": "Spheres (pos, radius) the body collides with; wallsOnly ones touch walls only; tire = which wheel it belongs to.",
+    "collision.inertiaBox": "Box (size, offset) the rotational inertia is computed from: bigger = slower to rotate.",
+    "collision.spinFactor": "How strongly the body rotation follows collisions and landings.",
+    "collision.wheels": "Suspension per wheel: pos, radius, collisionRadius, spring, damping, travel, tiltDeg. Karts mirror each to the other side.",
+    "display.cameraHeight": "Lowers the chase camera for this vehicle.",
+    "display.handlebarPos": "Bikes: the handlebar pivot the body leans around.",
+    "display.handlebarRotDeg": "Bikes: its rotation (degrees).",
+    "camera": "Chase camera (all vehicles): fov (degrees), distance behind, height, height of the look-at point."
+  },
+  "camera": { "fov": 55, "distance": 690, "height": 360, "targetHeight": 175 },
+  "vehicles": {
+    "ebike": {
+      "class": "bike",
+      "stats": {
+        "body": "bike",
+        "driftType": "inside",
+        "weightClass": "heavy",
+        "weight": 5.15,
+        "bumpDeviation": 0.2,
+        "topSpeed": 82.7,
+        "steerSpeedKeep": 0.99287367,
+        "tilt": 0.03,
+        "accel": [0.612, 0.25, 0.339, 0.044],
+        "accelSpeeds": [0.2, 0.8, 0.925],
+        "driftAccel": [1.95, 0.15],
+        "driftAccelSpeeds": [0.98],
+        "handlingManual": 0.02226,
+        "handlingAuto": 0.01999,
+        "handlingReactivity": 0.88,
+        "driftManual": 0.01508,
+        "driftAuto": 0.01146,
+        "driftReactivity": 0.94,
+        "outsideDriftAngle": 0,
+        "outsideDriftAngleStep": 0.8,
+        "miniTurboFrames": 37,
+        "surfaceSpeed": [1, 1, 0.5842, 0.3618, 0.2076, 0.8921, 1, 1, 1, 1, 0.1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        "surfaceTurn": [0.7, 0.05526, 0.08736, 0.05526, 0.05526, 0.03422, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7],
+        "maxSuspensionForce": 12,
+        "megaSize": 1.9,
+        "shrinkSize": 0.45
+      },
+      "collision": {
+        "rideHeight": 62,
+        "hitboxes": [
+          { "pos": [0, 55, 55], "radius": 65, "wallsOnly": false, "tire": 0 },
+          { "pos": [0, 43, -10], "radius": 55, "wallsOnly": false, "tire": 0 },
+          { "pos": [0, 40, -60], "radius": 55, "wallsOnly": false, "tire": 0 },
+          { "pos": [0, -23, 79], "radius": 45, "wallsOnly": true, "tire": 0 },
+          { "pos": [0, -21, -75], "radius": 45, "wallsOnly": true, "tire": 1 }
+        ],
+        "inertiaBox": { "size": [90, 80, 140], "offset": [0, -10, -40] },
+        "spinFactor": 0.12,
+        "wheels": [
+          { "pos": [0, -40, 0], "radius": 29.5, "collisionRadius": 43, "spring": 0.16, "damping": 0.18, "travel": 55, "tiltDeg": 0 },
+          { "pos": [0, 7, -75], "radius": 41, "collisionRadius": 43, "spring": 0.17, "damping": 0.2, "travel": 30, "tiltDeg": 0 }
+        ]
+      },
+      "display": { "cameraHeight": 54, "handlebarPos": [0, 51, 44], "handlebarRotDeg": [-25, 0, 0] },
+      "notes": [
+        "Light and nimble: the inside drifter, with good pull, grip and a long mini-turbo."
+      ]
+    },
+    "robotaxi": {
+      "class": "kart",
+      "stats": {
+        "body": "kart",
+        "driftType": "outsideKart",
+        "weightClass": "heavy",
+        "weight": 5.65,
+        "bumpDeviation": 0.4,
+        "topSpeed": 86.65,
+        "steerSpeedKeep": 0.9923737,
+        "tilt": 0.015,
+        "accel": [0.622, 0.2228, 0.345, 0.0454],
+        "accelSpeeds": [0.2, 0.8, 0.925],
+        "driftAccel": [1.85, 0.15],
+        "driftAccelSpeeds": [0.98],
+        "handlingManual": 0.0196,
+        "handlingAuto": 0.02195,
+        "handlingReactivity": 0.78,
+        "driftManual": 0.0184,
+        "driftAuto": 0.0206,
+        "driftReactivity": 0.93,
+        "outsideDriftAngle": 45,
+        "outsideDriftAngleStep": 0.8,
+        "miniTurboFrames": 34,
+        "surfaceSpeed": [1, 1, 0.5671, 0.3434, 0.1963, 0.8866, 1, 1, 1, 1, 0.1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        "surfaceTurn": [0.7, 0.05789, 0.09104, 0.05789, 0.05789, 0.03633, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7],
+        "maxSuspensionForce": 12,
+        "megaSize": 1.6,
+        "shrinkSize": 0.4
+      },
+      "collision": {
+        "rideHeight": 60,
+        "hitboxes": [
+          { "pos": [0, 40, 105], "radius": 75, "wallsOnly": false, "tire": 0 },
+          { "pos": [0, 40, 30], "radius": 80, "wallsOnly": false, "tire": 0 },
+          { "pos": [0, 45, -40], "radius": 85, "wallsOnly": false, "tire": 0 },
+          { "pos": [37, 30, -110], "radius": 60, "wallsOnly": false, "tire": 0 },
+          { "pos": [-37, 30, -110], "radius": 60, "wallsOnly": false, "tire": 0 },
+          { "pos": [-62, -20, 87], "radius": 45, "wallsOnly": true, "tire": 1 },
+          { "pos": [62, -20, 87], "radius": 45, "wallsOnly": true, "tire": 0 },
+          { "pos": [-62, -20, -100], "radius": 45, "wallsOnly": true, "tire": 3 },
+          { "pos": [62, -20, -100], "radius": 45, "wallsOnly": true, "tire": 2 }
+        ],
+        "inertiaBox": { "size": [160, 110, 240], "offset": [0, 5, -8] },
+        "spinFactor": 0.07,
+        "wheels": [
+          { "pos": [61.2, 5, 87.1], "radius": 28, "collisionRadius": 43, "spring": 0.07, "damping": 0.06, "travel": 40, "tiltDeg": 0 },
+          { "pos": [61.2, 19, -100.2], "radius": 31, "collisionRadius": 43, "spring": 0.07, "damping": 0.06, "travel": 50, "tiltDeg": 0 }
+        ]
+      },
+      "display": { "cameraHeight": 60 },
+      "notes": [
+        "Heavy cruiser: the highest top speed, for less pull and steering."
+      ]
+    },
+    "buggy": {
+      "class": "kart",
+      "stats": {
+        "body": "kart",
+        "driftType": "outsideKart",
+        "weightClass": "heavy",
+        "weight": 5.58,
+        "bumpDeviation": 0.4,
+        "topSpeed": 80.05,
+        "steerSpeedKeep": 0.9947737,
+        "tilt": 0.015,
+        "accel": [0.574, 0.584, 0.452, 0.0654],
+        "accelSpeeds": [0.65, 0.85, 0.95],
+        "driftAccel": [1.55, 0.13],
+        "driftAccelSpeeds": [0.965],
+        "handlingManual": 0.0232,
+        "handlingAuto": 0.02405,
+        "handlingReactivity": 0.85,
+        "driftManual": 0.01852,
+        "driftAuto": 0.02086,
+        "driftReactivity": 0.89,
+        "outsideDriftAngle": 42,
+        "outsideDriftAngleStep": 0.8,
+        "miniTurboFrames": 29,
+        "surfaceSpeed": [1, 1, 0.6697, 0.4538, 0.2641, 0.9199, 1, 1, 1, 1, 0.1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        "surfaceTurn": [0.7, 0.0763, 0.1168, 0.0763, 0.0763, 0.0511, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7],
+        "maxSuspensionForce": 12,
+        "megaSize": 1.7,
+        "shrinkSize": 0.4
+      },
+      "collision": {
+        "rideHeight": 19,
+        "hitboxes": [
+          { "pos": [0, 60, 95], "radius": 65, "wallsOnly": false, "tire": 0 },
+          { "pos": [0, 70, 30], "radius": 75, "wallsOnly": false, "tire": 0 },
+          { "pos": [0, 80, -35], "radius": 85, "wallsOnly": false, "tire": 0 },
+          { "pos": [0, 85, -95], "radius": 90, "wallsOnly": false, "tire": 0 },
+          { "pos": [-63, 19, 75], "radius": 45, "wallsOnly": true, "tire": 1 },
+          { "pos": [63, 19, 75], "radius": 45, "wallsOnly": true, "tire": 0 },
+          { "pos": [-70, 19, -84], "radius": 45, "wallsOnly": true, "tire": 3 },
+          { "pos": [70, 19, -84], "radius": 45, "wallsOnly": true, "tire": 2 }
+        ],
+        "inertiaBox": { "size": [160, 80, 200], "offset": [0, 28, -10] },
+        "spinFactor": 0.1,
+        "wheels": [
+          { "pos": [63, 35, 75], "radius": 19, "collisionRadius": 43, "spring": 0.11, "damping": 0.09, "travel": 40, "tiltDeg": 0 },
+          { "pos": [70, 42, -84], "radius": 26, "collisionRadius": 43, "spring": 0.11, "damping": 0.09, "travel": 40, "tiltDeg": 0 }
+        ]
+      },
+      "display": { "cameraHeight": 20 },
+      "notes": [
+        "Quick and tight: the strongest pull and the tightest turns, a straight drift, for the lowest top speed."
+      ]
+    }
+  }
+}

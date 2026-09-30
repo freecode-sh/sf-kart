@@ -1,0 +1,54 @@
+{
+ "rivals": [
+  {
+   "name": "Karl the Fog",
+   "color": "#d9dee6",
+   "accent": "#6b7a8f",
+   "vehicle": "robotaxi",
+   "frames": 10076,
+   "stride": 2,
+   "finishFrame": 10048,
+   "offset": 0
+  },
+  {
+   "name": "Sutro",
+   "color": "#e53935",
+   "accent": "#fafafa",
+   "vehicle": "ebike",
+   "frames": 10348,
+   "stride": 2,
+   "finishFrame": 10320,
+   "offset": 120912
+  },
+  {
+   "name": "Muni",
+   "color": "#2e86de",
+   "accent": "#f39c12",
+   "vehicle": "buggy",
+   "frames": 10857,
+   "stride": 2,
+   "finishFrame": 10828,
+   "offset": 245088
+  },
+  {
+   "name": "Lombard",
+   "color": "#8e44ad",
+   "accent": "#f1c40f",
+   "vehicle": "ebike",
+   "frames": 11226,
+   "stride": 2,
+   "finishFrame": 11198,
+   "offset": 375384
+  },
+  {
+   "name": "Coit",
+   "color": "#27ae60",
+   "accent": "#ecf0f1",
+   "vehicle": "buggy",
+   "frames": 11623,
+   "stride": 2,
+   "finishFrame": 11595,
+   "offset": 510096
+  }
+ ]
+}

@@ -1,0 +1,257 @@
+/**
+ * Port of Kinoko source/game/field/KCollisionTypes.hh.
+ *
+ * KCL type constants, masks and macros. Masks are u32 values (always kept unsigned with `>>> 0`).
+ */
+
+/** Computes the "Base Type" portion of the KCL flags. It's the lower 5 bits of the flag. */
+export function KCL_ATTRIBUTE_TYPE(x: number): number {
+    return x & 0x1f;
+}
+
+/** Converts an attribute to the type mask bitfield for that attribute. */
+export function KCL_TYPE_BIT(x: number): number {
+    return (1 << x) >>> 0;
+}
+
+/** Given the full 2 byte KCL flag for a triangle, extracts the "Base Type" portion of the flag. */
+export function KCL_ATTRIBUTE_TYPE_BIT(x: number): number {
+    return KCL_TYPE_BIT(KCL_ATTRIBUTE_TYPE(x));
+}
+
+// KCL attribute types
+export enum KColType {
+    COL_TYPE_ROAD = 0,
+    COL_TYPE_SLIPPERY_ROAD = 1,
+    COL_TYPE_WEAK_OFF_ROAD = 2,
+    COL_TYPE_OFF_ROAD = 3,
+    COL_TYPE_HEAVY_OFF_ROAD = 4,
+    COL_TYPE_SLIPPERY_ROAD_2 = 5,
+    COL_TYPE_BOOST_PAD = 6,
+    COL_TYPE_BOOST_RAMP = 7,
+    COL_TYPE_JUMP_PAD = 8,
+    COL_TYPE_ITEM_ROAD = 9,
+    COL_TYPE_SOLID_OOB = 0xa,
+    COL_TYPE_MOVING_WATER = 0xb,
+    COL_TYPE_WALL = 0xc,
+    COL_TYPE_INVISIBLE_WALL = 0xd,
+    COL_TYPE_ITEM_WALL = 0xe,
+    COL_TYPE_WALL_2 = 0xf,
+    COL_TYPE_FALL_BOUNDARY = 0x10,
+    COL_TYPE_CANNON_TRIGGER = 0x11,
+    COL_TYPE_FORCE_RECALCULATE_ROUTE = 0x12,
+    COL_TYPE_HALFPIPE_RAMP = 0x13,
+    COL_TYPE_PLAYER_WALL = 0x14,
+    COL_TYPE_MOVING_ROAD = 0x15,
+    COL_TYPE_STICKY_ROAD = 0x16,
+    COL_TYPE_ROAD2 = 0x17,
+    COL_TYPE_SOUND_TRIGGER = 0x18,
+    COL_TYPE_WEAK_WALL = 0x19,
+    COL_TYPE_EFFECT_TRIGGER = 0x1a,
+    COL_TYPE_ITEM_STATE_MODIFIER = 0x1b,
+    COL_TYPE_HALFPIPE_INVISIBLE_WALL = 0x1c,
+    COL_TYPE_ROTATING_ROAD = 0x1d,
+    COL_TYPE_SPECIAL_WALL = 0x1e,
+    COL_TYPE_INVISIBLE_WALL2 = 0x1f,
+
+    COL_TYPE_COUNT,
+}
+
+// The C typedef'd enum puts the constants in the global namespace; mirror that as plain exports.
+export const COL_TYPE_ROAD = KColType.COL_TYPE_ROAD;
+export const COL_TYPE_SLIPPERY_ROAD = KColType.COL_TYPE_SLIPPERY_ROAD;
+export const COL_TYPE_WEAK_OFF_ROAD = KColType.COL_TYPE_WEAK_OFF_ROAD;
+export const COL_TYPE_OFF_ROAD = KColType.COL_TYPE_OFF_ROAD;
+export const COL_TYPE_HEAVY_OFF_ROAD = KColType.COL_TYPE_HEAVY_OFF_ROAD;
+export const COL_TYPE_SLIPPERY_ROAD_2 = KColType.COL_TYPE_SLIPPERY_ROAD_2;
+export const COL_TYPE_BOOST_PAD = KColType.COL_TYPE_BOOST_PAD;
+export const COL_TYPE_BOOST_RAMP = KColType.COL_TYPE_BOOST_RAMP;
+export const COL_TYPE_JUMP_PAD = KColType.COL_TYPE_JUMP_PAD;
+export const COL_TYPE_ITEM_ROAD = KColType.COL_TYPE_ITEM_ROAD;
+export const COL_TYPE_SOLID_OOB = KColType.COL_TYPE_SOLID_OOB;
+export const COL_TYPE_MOVING_WATER = KColType.COL_TYPE_MOVING_WATER;
+export const COL_TYPE_WALL = KColType.COL_TYPE_WALL;
+export const COL_TYPE_INVISIBLE_WALL = KColType.COL_TYPE_INVISIBLE_WALL;
+export const COL_TYPE_ITEM_WALL = KColType.COL_TYPE_ITEM_WALL;
+export const COL_TYPE_WALL_2 = KColType.COL_TYPE_WALL_2;
+export const COL_TYPE_FALL_BOUNDARY = KColType.COL_TYPE_FALL_BOUNDARY;
+export const COL_TYPE_CANNON_TRIGGER = KColType.COL_TYPE_CANNON_TRIGGER;
+export const COL_TYPE_FORCE_RECALCULATE_ROUTE = KColType.COL_TYPE_FORCE_RECALCULATE_ROUTE;
+export const COL_TYPE_HALFPIPE_RAMP = KColType.COL_TYPE_HALFPIPE_RAMP;
+export const COL_TYPE_PLAYER_WALL = KColType.COL_TYPE_PLAYER_WALL;
+export const COL_TYPE_MOVING_ROAD = KColType.COL_TYPE_MOVING_ROAD;
+export const COL_TYPE_STICKY_ROAD = KColType.COL_TYPE_STICKY_ROAD;
+export const COL_TYPE_ROAD2 = KColType.COL_TYPE_ROAD2;
+export const COL_TYPE_SOUND_TRIGGER = KColType.COL_TYPE_SOUND_TRIGGER;
+export const COL_TYPE_WEAK_WALL = KColType.COL_TYPE_WEAK_WALL;
+export const COL_TYPE_EFFECT_TRIGGER = KColType.COL_TYPE_EFFECT_TRIGGER;
+export const COL_TYPE_ITEM_STATE_MODIFIER = KColType.COL_TYPE_ITEM_STATE_MODIFIER;
+export const COL_TYPE_HALFPIPE_INVISIBLE_WALL = KColType.COL_TYPE_HALFPIPE_INVISIBLE_WALL;
+export const COL_TYPE_ROTATING_ROAD = KColType.COL_TYPE_ROTATING_ROAD;
+export const COL_TYPE_SPECIAL_WALL = KColType.COL_TYPE_SPECIAL_WALL;
+export const COL_TYPE_INVISIBLE_WALL2 = KColType.COL_TYPE_INVISIBLE_WALL2;
+export const COL_TYPE_COUNT = KColType.COL_TYPE_COUNT;
+
+const B = KCL_TYPE_BIT;
+const u32 = (x: number): number => x >>> 0;
+
+export const KCL_SOFT_WALL_MASK = 0x8000;
+export const KCL_ANY = 0xffffffff;
+export const KCL_NONE = 0x00000000;
+
+/** 0x05070000 */
+export const KCL_TYPE_DIRECTIONAL = u32(
+    B(COL_TYPE_FALL_BOUNDARY) |
+        B(COL_TYPE_SOUND_TRIGGER) |
+        B(COL_TYPE_FORCE_RECALCULATE_ROUTE) |
+        B(COL_TYPE_EFFECT_TRIGGER) |
+        B(COL_TYPE_CANNON_TRIGGER),
+);
+
+/** 0xF0F8FFFF */
+export const KCL_TYPE_SOLID_SURFACE = u32(
+    KCL_ANY &
+        (~B(COL_TYPE_FALL_BOUNDARY) &
+            ~B(COL_TYPE_CANNON_TRIGGER) &
+            ~B(COL_TYPE_FORCE_RECALCULATE_ROUTE) &
+            ~B(COL_TYPE_SOUND_TRIGGER) &
+            ~B(COL_TYPE_WEAK_WALL) &
+            ~B(COL_TYPE_EFFECT_TRIGGER) &
+            ~B(COL_TYPE_ITEM_STATE_MODIFIER)),
+);
+
+/** 0x20E80FFF - Any KCL that the player or items can drive/land on. */
+export const KCL_TYPE_FLOOR = u32(
+    B(COL_TYPE_ROAD) |
+        B(COL_TYPE_SLIPPERY_ROAD) |
+        B(COL_TYPE_WEAK_OFF_ROAD) |
+        B(COL_TYPE_OFF_ROAD) |
+        B(COL_TYPE_HEAVY_OFF_ROAD) |
+        B(COL_TYPE_SLIPPERY_ROAD_2) |
+        B(COL_TYPE_BOOST_PAD) |
+        B(COL_TYPE_BOOST_RAMP) |
+        B(COL_TYPE_JUMP_PAD) |
+        B(COL_TYPE_ITEM_ROAD) |
+        B(COL_TYPE_SOLID_OOB) |
+        B(COL_TYPE_MOVING_WATER) |
+        B(COL_TYPE_HALFPIPE_RAMP) |
+        B(COL_TYPE_MOVING_ROAD) |
+        B(COL_TYPE_STICKY_ROAD) |
+        B(COL_TYPE_ROAD2) |
+        B(COL_TYPE_ROTATING_ROAD),
+);
+
+/** 0x20E80DFF - Any KCL that the player can drive on. */
+export const KCL_TYPE_DRIVER_FLOOR = u32(KCL_TYPE_FLOOR & ~B(COL_TYPE_ITEM_ROAD));
+
+/** 0xD010F000 */
+export const KCL_TYPE_WALL = u32(
+    B(COL_TYPE_WALL) |
+        B(COL_TYPE_INVISIBLE_WALL) |
+        B(COL_TYPE_ITEM_WALL) |
+        B(COL_TYPE_WALL_2) |
+        B(COL_TYPE_PLAYER_WALL) |
+        B(COL_TYPE_HALFPIPE_INVISIBLE_WALL) |
+        B(COL_TYPE_SPECIAL_WALL) |
+        B(COL_TYPE_INVISIBLE_WALL2),
+);
+
+/** 0xC010B000 */
+export const KCL_TYPE_DRIVER_WALL = u32(
+    KCL_TYPE_WALL & ~B(COL_TYPE_ITEM_WALL) & ~B(COL_TYPE_HALFPIPE_INVISIBLE_WALL),
+);
+
+/** 0xC0109000 */
+export const KCL_TYPE_DRIVER_WALL_NO_INVISIBLE_WALL = u32(
+    KCL_TYPE_DRIVER_WALL & ~B(COL_TYPE_INVISIBLE_WALL),
+);
+
+/** 0x4010B000 */
+export const KCL_TYPE_DRIVER_WALL_NO_INVISIBLE_WALL2 = u32(
+    KCL_TYPE_DRIVER_WALL & ~B(COL_TYPE_INVISIBLE_WALL2),
+);
+
+/** 0x4010D000 */
+export const KCL_TYPE_4010D000 = u32(
+    (KCL_TYPE_DRIVER_WALL_NO_INVISIBLE_WALL & ~B(COL_TYPE_INVISIBLE_WALL2)) |
+        B(COL_TYPE_ITEM_WALL),
+);
+
+/** 0x4000D000 */
+export const KCL_TYPE_OBJECT_WALL = u32(
+    B(COL_TYPE_SPECIAL_WALL) | B(COL_TYPE_WALL_2) | B(COL_TYPE_ITEM_WALL) | B(COL_TYPE_WALL),
+);
+
+/** 0xEFFFBDFF */
+export const KCL_TYPE_VEHICLE_INTERACTABLE = u32(
+    ~B(COL_TYPE_ITEM_ROAD) & ~B(COL_TYPE_ITEM_WALL) & ~B(COL_TYPE_HALFPIPE_INVISIBLE_WALL),
+);
+
+/** 0xEAF8BDFF */
+export const KCL_TYPE_VEHICLE_COLLIDEABLE = u32(
+    KCL_TYPE_VEHICLE_INTERACTABLE &
+        ~B(COL_TYPE_SOUND_TRIGGER) &
+        ~B(COL_TYPE_EFFECT_TRIGGER) &
+        ~B(COL_TYPE_FALL_BOUNDARY) &
+        ~B(COL_TYPE_CANNON_TRIGGER) &
+        ~B(COL_TYPE_FORCE_RECALCULATE_ROUTE),
+);
+
+export const KCL_TYPE_CAMERA_COLLIDABLE = u32(
+    KCL_TYPE_VEHICLE_COLLIDEABLE & ~B(COL_TYPE_INVISIBLE_WALL2) & ~B(COL_TYPE_ITEM_STATE_MODIFIER),
+);
+
+/** 0xE0F8BDFF */
+export const KCL_TYPE_NON_DIRECTIONAL = u32(
+    KCL_TYPE_VEHICLE_COLLIDEABLE & ~B(COL_TYPE_ITEM_STATE_MODIFIER) & ~B(COL_TYPE_WEAK_WALL),
+);
+
+/** 0xEAFABDFF */
+export const KCL_TYPE_DRIVER_SOLID_SURFACE = u32(
+    KCL_TYPE_VEHICLE_COLLIDEABLE | B(COL_TYPE_CANNON_TRIGGER),
+);
+
+/** 0xB0E82DFF (note C++ precedence: `&` binds tighter than `|`) */
+export const KCL_TYPE_B0E82DFF = u32(
+    KCL_TYPE_DRIVER_FLOOR |
+        B(COL_TYPE_HALFPIPE_INVISIBLE_WALL) |
+        B(COL_TYPE_INVISIBLE_WALL) |
+        (B(COL_TYPE_INVISIBLE_WALL2) & ~B(COL_TYPE_ITEM_ROAD)),
+);
+
+/** 0x60E8DFFF */
+export const KCL_TYPE_60E8DFFF = u32(
+    KCL_TYPE_FLOOR |
+        B(COL_TYPE_WALL) |
+        B(COL_TYPE_ITEM_WALL) |
+        B(COL_TYPE_WALL_2) |
+        B(COL_TYPE_SPECIAL_WALL),
+);
+
+/** 0x64EBDFFF */
+export const KCL_TYPE_64EBDFFF = u32(
+    KCL_TYPE_60E8DFFF |
+        B(COL_TYPE_EFFECT_TRIGGER) |
+        B(COL_TYPE_CANNON_TRIGGER) |
+        B(COL_TYPE_FALL_BOUNDARY),
+);
+
+/** 0x64EBFFFF */
+export const KCL_TYPE_64EBFFFF = u32(KCL_TYPE_64EBDFFF | B(COL_TYPE_INVISIBLE_WALL));
+
+/** 0x6CEBDFFF */
+export const KCL_TYPE_6CEBDFFF = u32(KCL_TYPE_64EBDFFF | B(COL_TYPE_ITEM_STATE_MODIFIER));
+
+/** 0x80002000 */
+export const KCL_TYPE_INVISIBLE_WALL = u32(B(COL_TYPE_INVISIBLE_WALL) | B(COL_TYPE_INVISIBLE_WALL2));
+
+/** 0x90002000 */
+export const KCL_TYPE_ANY_INVISIBLE_WALL = u32(
+    KCL_TYPE_INVISIBLE_WALL | B(COL_TYPE_HALFPIPE_INVISIBLE_WALL),
+);
+
+/** The header of the KCL file format. It is 0x3C bytes long. */
+export const KCOL_HEADER_SIZE = 0x3c;
+
+/** `typedef u32 KCLTypeMask;` */
+export type KCLTypeMask = number;

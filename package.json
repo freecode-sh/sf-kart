@@ -1,0 +1,38 @@
+{
+  "name": "sf-kart",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A browser kart racer on real San Francisco streets",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/freecode-sh/sf-kart.git"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/proj4": "^2.5.6",
+    "@types/three": "^0.186.0",
+    "geotiff": "^3.0.5",
+    "laz-perf": "^0.0.7",
+    "proj4": "^2.22.0",
+    "sharp": "^0.35.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
