@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { loadModelFile } from './modelLoader';
 
 export type WorkshopFile = { name: string; type: string; buffer: ArrayBuffer };
 export type WorkshopModel = {
@@ -55,11 +54,8 @@ export async function mountWorkshopVisuals(project: WorkshopProject, target: THR
             return bundle.urls.get(key) ?? bundle.urls.get(key.split('/').pop() ?? key) ?? url;
         });
         try {
-            const ext = main.name.split('.').pop()?.toLowerCase();
-            let root: THREE.Group;
-            if (ext === 'fbx') root = new FBXLoader(manager).parse(main.buffer.slice(0), '');
-            else if (ext === 'glb' || ext === 'gltf') root = (await new GLTFLoader(manager).parseAsync(main.buffer.slice(0), '')).scene;
-            else continue;
+            const loaded = await loadModelFile(main, entry.files, manager);
+            const root = loaded.root;
             root.position.set(...entry.position);
             root.rotation.y = THREE.MathUtils.degToRad(entry.rotationY);
             root.scale.setScalar(Math.max(0.001, entry.scale));
