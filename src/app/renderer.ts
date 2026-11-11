@@ -336,7 +336,24 @@ export class Renderer {
                 mesh.position.y += tuck;
             }
         }
-        // Position custom tires on the physics wheel centers (the engine still owns wheel placement).\n        if (this.customWheelHolders.length) {\n            const local = this.localWheels;\n            while (local.length < kart.wheels.length) local.push(new THREE.Vector3());\n            local.length = kart.wheels.length;\n            kart.wheels.forEach((w, i) => local[i]!.copy(w).applyMatrix4(inv));\n            this.customWheelHolders.forEach((holder, i) => {\n                const p = local[i % Math.max(1, local.length)];\n                if (p) holder.position.copy(p);\n            });\n        }\n        if (this.customMixer) {\n            const dt = Math.max(0, timeSec - this.customAnimationTime);\n            this.customAnimationTime = timeSec;\n            this.customMixer.update(Math.min(dt, 0.05));\n        }\n\n        // The vehicle poses itself and spins its wheels.
+        // Position custom tires on the physics wheel centers (the engine still owns wheel placement).
+        if (this.customWheelHolders.length) {
+            const local = this.localWheels;
+            while (local.length < kart.wheels.length) local.push(new THREE.Vector3());
+            local.length = kart.wheels.length;
+            kart.wheels.forEach((w, i) => local[i]!.copy(w).applyMatrix4(inv));
+            this.customWheelHolders.forEach((holder, i) => {
+                const p = local[i % Math.max(1, local.length)];
+                if (p) holder.position.copy(p);
+            });
+        }
+        if (this.customMixer) {
+            const dt = Math.max(0, timeSec - this.customAnimationTime);
+            this.customAnimationTime = timeSec;
+            this.customMixer.update(Math.min(dt, 0.05));
+        }
+
+        // The vehicle poses itself and spins its wheels.
         this.rider.update({
             timeSec,
             steer: kart.steer ?? 0,
