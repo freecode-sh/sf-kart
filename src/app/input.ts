@@ -229,9 +229,12 @@ export class InputManager {
     usedGamepad = false;
 
     constructor(private readonly target: HTMLElement) {
-        window.addEventListener('keydown', (e) => {
-            // Typing in a text field (the leaderboard's name) isn't driving.
-            if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
+        // Capture at document level so focused buttons/overlays cannot swallow race controls.
+        // Menus and onboarding own their keys while gameplay input is disabled.
+        document.addEventListener('keydown', (e) => {
+            if (!this.enabled) return;
+            const target = e.target;
+            if (target instanceof HTMLElement && (target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) return;
             if (this.isBound(e.code) || e.code === 'Space') e.preventDefault();
             if (!this.down.has(e.code)) {
                 this.pressedThisFrame.add(e.code);
@@ -242,11 +245,20 @@ export class InputManager {
                 else if (k.trickRight?.includes(e.code)) this.pendingTrick = TrickDir.Right;
             }
             this.down.add(e.code);
-        });
-        window.addEventListener('keyup', (e) => this.down.delete(e.code));
-        window.addEventListener('blur', () => {
+        }, true);
+        document.addEventListener('keyup', (e) => this.down.delete(e.code), true);
+        const clearHeldInput = () => {
             this.down.clear();
+            this.pressedThisFrame.clear();
             this.mouseDown.clear();
+            this.pendingTrick = TrickDir.None;
+            this.lastTrickHeld = TrickDir.None;
+            this.keySteer = 0;
+            this.mouseStick = 0;
+        };
+        window.addEventListener('blur', clearHeldInput);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) clearHeldInput();
         });
         target.addEventListener('mousedown', (e) => {
             this.mouseDown.add(e.button);
