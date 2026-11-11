@@ -25,7 +25,7 @@ export default defineConfig(({ command, isPreview }) => ({
         // (public/ minus data/ is copied by deployData.)
         copyPublicDir: false,
         rolldownOptions: {
-            input: { main: resolve('index.html'), garage: resolve('garage.html') },
+            input: { main: resolve('index.html'), garage: resolve('garage.html'), courseEditor: resolve('course-editor.html') },
             // three.js on its own: it changes far less often than the game, so it stays cached.
             output: { codeSplitting: { groups: [{ name: 'three', test: /[\\/]node_modules[\\/]three[\\/]/ }] } },
         },
