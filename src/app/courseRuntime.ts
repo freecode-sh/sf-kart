@@ -10,6 +10,9 @@ export type WorkshopProject = {
     models: WorkshopModel[];
     skybox?: WorkshopFile;
     music?: WorkshopFile;
+    countdownLabels?: string[];
+    countdownSound?: WorkshopFile;
+    fanfare?: WorkshopFile;
     updatedAt: number;
 };
 
@@ -104,4 +107,55 @@ export class WorkshopMusic {
     stop(): void { if (this.audio) { this.audio.pause(); this.audio.currentTime = 0; } }
     setVolume(value: number): void { if (this.audio) this.audio.volume = Math.max(0, Math.min(1, value)); }
     dispose(): void { this.audio?.pause(); this.audio = null; if (this.url) URL.revokeObjectURL(this.url); this.url = ''; }
+}
+
+/** Optional race-start audio supplied by the Course Workshop. */
+export class WorkshopStartAudio {
+    private countdown: HTMLAudioElement | null = null;
+    private fanfare: HTMLAudioElement | null = null;
+    private urls: string[] = [];
+    labels: string[] = ['3', '2', '1'];
+
+    async load(): Promise<boolean> {
+        this.dispose();
+        const project = await getWorkshopProject();
+        if (!project) return false;
+        if (project.countdownLabels?.length) this.labels = project.countdownLabels.slice(0, 3);
+        const make = (file?: WorkshopFile) => {
+            if (!file?.buffer?.byteLength) return null;
+            const url = URL.createObjectURL(new Blob([file.buffer], { type: file.type || 'audio/mpeg' }));
+            this.urls.push(url);
+            const audio = new Audio(url);
+            audio.preload = 'auto';
+            return audio;
+        };
+        this.countdown = make(project.countdownSound);
+        this.fanfare = make(project.fanfare);
+        return !!(this.countdown || this.fanfare);
+    }
+
+    playFanfare(): void {
+        if (!this.fanfare) return;
+        this.fanfare.currentTime = 0;
+        void this.fanfare.play().catch(error => console.warn('Race fanfare could not play:', error));
+    }
+    playCountdown(): void {
+        if (!this.countdown) return;
+        this.countdown.currentTime = 0;
+        void this.countdown.play().catch(error => console.warn('Countdown sound could not play:', error));
+    }
+    label(original: string | null): string | null {
+        if (original === '3') return this.labels[0] ?? original;
+        if (original === '2') return this.labels[1] ?? original;
+        if (original === '1') return this.labels[2] ?? original;
+        return original;
+    }
+    get hasCountdownSound(): boolean { return !!this.countdown; }
+    dispose(): void {
+        this.countdown?.pause(); this.fanfare?.pause();
+        this.countdown = null; this.fanfare = null;
+        for (const url of this.urls) URL.revokeObjectURL(url);
+        this.urls = [];
+        this.labels = ['3', '2', '1'];
+    }
 }
