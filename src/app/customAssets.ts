@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadModelFile } from './modelLoader';
 
 export type CustomSlot = 'character' | 'kart' | 'tires';
 export type TransformValues = { position: [number, number, number]; rotation: [number, number, number]; scale: [number, number, number] };
@@ -92,16 +91,8 @@ export async function loadCustomModel(asset: StoredAsset): Promise<{ root: THREE
     try {
         const file = asset.files.find((f) => f.name === asset.mainFile);
         if (!file) throw new Error('The main model file ' + asset.mainFile + ' is missing.');
-        const ext = file.name.split('.').pop()?.toLowerCase();
-        if (ext === 'fbx') {
-            const root = new FBXLoader(manager).parse(file.buffer.slice(0), '');
-            return { root: root as THREE.Group, animations: root.animations ?? [] };
-        }
-        if (ext === 'glb' || ext === 'gltf') {
-            const gltf = await new GLTFLoader(manager).parseAsync(file.buffer.slice(0), '');
-            return { root: gltf.scene, animations: gltf.animations ?? [] };
-        }
-        throw new Error('Use a .glb, .gltf, or .fbx model file.');
+        const loaded = await loadModelFile(file, asset.files, manager);
+        return { root: loaded.root, animations: loaded.animations };
     } finally {
         for (const url of new Set(urls.values())) URL.revokeObjectURL(url);
     }
