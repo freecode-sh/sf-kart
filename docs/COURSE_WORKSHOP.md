@@ -2,7 +2,7 @@
 
 Open `course-editor.html` from the game or the character/kart studio.
 
-- Import GLB, GLTF or FBX course models (select all companion textures and buffers alongside each model).
+- Import GLB, GLTF, FBX, OBJ, STL, PLY, DAE or 3DS course models (select all companion material files (such as MTL), textures and buffers alongside each model).
 - Select a model in the list and adjust its position, Y rotation and uniform scale.
 - Import an equirectangular 360-degree image as the scene skybox.
 - Import an audio file and preview it with the built-in audio player.
