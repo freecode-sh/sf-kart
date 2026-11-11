@@ -11,6 +11,8 @@ import { buildVehicleModel } from './sf/vehicleModels';
 import { trickFlourish } from './sf/vehicleModel';
 import type { VehicleId } from './vehicles';
 import { RenderScale } from './renderScale';
+import { applyTransform, getCustomAsset, getCustomTransforms, loadCustomModel } from './customAssets';
+import { getWorkshopProject, mountWorkshopVisuals } from './courseRuntime';
 
 export interface CourseMeta {
     name?: string;
@@ -83,6 +85,17 @@ export class Renderer {
     private riderVehicle: VehicleId = 'ebike';
     /** World to kart-local space, for placing the wheels. */
     private readonly toKart = new THREE.Matrix4();
+    /** Optional local custom models saved by garage.html. */
+    private readonly customVisuals = new THREE.Group();
+    private readonly customWheelHolders: THREE.Group[] = [];
+    private customMixer: THREE.AnimationMixer | null = null;
+    private customAnimationTime = 0;
+    private customLoadVersion = 0;
+    private customTires = false;
+    /** Decorative models and skybox from the local Course Workshop project. */
+    private workshopGroup = new THREE.Group();
+    private workshopSkybox: THREE.Texture | null = null;
+    private workshopLoadVersion = 0;
 
     constructor(private readonly canvas: HTMLCanvasElement) {
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -132,16 +145,38 @@ export class Renderer {
     /** Replaces the drawn course: the San Francisco scene (src/app/sf) draws its own road, terrain, city and sky. */
     setCourse(kcl: Uint8Array, meta: CourseMeta | null): void {
         this.courseGroup.clear();
+        this.workshopGroup.clear();
         this.sf?.dispose();
         this.sf = null;
         this.scene.environment = null;
         this.camera.far = 3_000_000;
         this.camera.updateProjectionMatrix();
+        this.scene.add(this.workshopGroup);
+        void this.loadWorkshopCourse();
         if (!meta) return;
         this.sf = new SfScene(meta as unknown as RoadMeta, this.renderer, this.scene, { sun: this.sun, hemi: this.hemi }, kcl);
         this.courseGroup.add(this.sf.group);
         // (Its dash panels are drawn by the course too: src/app/sf/dashPanels.ts.)
         if (meta.start) this.addStartLine(meta);
+    }
+
+    private async loadWorkshopCourse(): Promise<void> {
+        const version = ++this.workshopLoadVersion;
+        try {
+            const project = await getWorkshopProject();
+            if (version !== this.workshopLoadVersion || !project) return;
+            this.workshopGroup.clear();
+            const texture = await mountWorkshopVisuals(project, this.workshopGroup);
+            if (version !== this.workshopLoadVersion) { texture?.dispose(); return; }
+            if (texture) {
+                this.workshopSkybox?.dispose();
+                this.workshopSkybox = texture;
+                this.scene.background = texture;
+                this.scene.environment = texture;
+            }
+        } catch (error) {
+            console.warn('Could not load Course Workshop visuals; using the stock course scene.', error);
+        }
     }
 
     /** Checkered start/finish line. */
@@ -175,6 +210,7 @@ export class Renderer {
         this.kart.add(this.trickRoot);
         this.kartBody = new THREE.Group();
         this.trickRoot.add(this.kartBody);
+        this.kartBody.add(this.customVisuals);
 
         // Drift sparks (behind the rear wheel).
         this.sparks = new THREE.Group();
@@ -207,9 +243,63 @@ export class Renderer {
         this.riderVehicle = vehicle;
         this.rider = buildVehicleModel(vehicle);
         this.kartBody.add(this.rider.body);
+        void this.loadCustomVisuals();
         for (const w of this.rider.wheels) this.trickRoot.add(w);
         // The boost flame comes out of the vehicle's exhaust.
         this.flame.position.copy(this.rider.exhaust).add(new THREE.Vector3(0, 0, -55));
+    }
+
+    /** Loads locally imported garage models; stock physics and collision remain unchanged. */
+    private async loadCustomVisuals(): Promise<void> {
+        const version = ++this.customLoadVersion;
+        try {
+            const [kartAsset, characterAsset, tireAsset] = await Promise.all([
+                getCustomAsset('kart'), getCustomAsset('character'), getCustomAsset('tires'),
+            ]);
+            if (version !== this.customLoadVersion) return;
+            this.customVisuals.clear();
+            this.customWheelHolders.length = 0;
+            this.customMixer?.stopAllAction();
+            this.customMixer = null;
+            const transforms = getCustomTransforms();
+            let customKart = false;
+            if (kartAsset) {
+                const model = await loadCustomModel(kartAsset);
+                if (version !== this.customLoadVersion) return;
+                applyTransform(model.root, transforms.kart);
+                this.customVisuals.add(model.root);
+                customKart = true;
+            }
+            if (characterAsset) {
+                const model = await loadCustomModel(characterAsset);
+                if (version !== this.customLoadVersion) return;
+                applyTransform(model.root, transforms.character);
+                this.customVisuals.add(model.root);
+                if (model.animations.length) {
+                    this.customMixer = new THREE.AnimationMixer(model.root);
+                    this.customMixer.clipAction(model.animations[0]!).play();
+                }
+            }
+            this.customTires = !!tireAsset;
+            if (tireAsset) {
+                const model = await loadCustomModel(tireAsset);
+                if (version !== this.customLoadVersion) return;
+                for (let i = 0; i < this.rider.wheels.length; i++) {
+                    const holder = new THREE.Group();
+                    const wheel = model.root.clone(true);
+                    applyTransform(wheel, transforms.tires);
+                    holder.add(wheel);
+                    this.customVisuals.add(holder);
+                    this.customWheelHolders.push(holder);
+                }
+            }
+            this.rider.body.visible = !customKart;
+            this.rider.wheels.forEach((wheel) => (wheel.visible = !this.customTires));
+        } catch (error) {
+            console.warn('Could not load custom garage models; using stock visuals.', error);
+            this.rider.body.visible = true;
+            this.rider.wheels.forEach((wheel) => (wheel.visible = true));
+        }
     }
 
     render(kart: KartVisualState, cam: CameraState, timeSec: number): void {
@@ -246,6 +336,23 @@ export class Renderer {
                 mesh.position.y += tuck;
             }
         }
+        // Position custom tires on the physics wheel centers (the engine still owns wheel placement).
+        if (this.customWheelHolders.length) {
+            const local = this.localWheels;
+            while (local.length < kart.wheels.length) local.push(new THREE.Vector3());
+            local.length = kart.wheels.length;
+            kart.wheels.forEach((w, i) => local[i]!.copy(w).applyMatrix4(inv));
+            this.customWheelHolders.forEach((holder, i) => {
+                const p = local[i % Math.max(1, local.length)];
+                if (p) holder.position.copy(p);
+            });
+        }
+        if (this.customMixer) {
+            const dt = Math.max(0, timeSec - this.customAnimationTime);
+            this.customAnimationTime = timeSec;
+            this.customMixer.update(Math.min(dt, 0.05));
+        }
+
         // The vehicle poses itself and spins its wheels.
         this.rider.update({
             timeSec,

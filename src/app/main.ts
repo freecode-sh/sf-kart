@@ -14,6 +14,7 @@ import { ScaleMoment } from './renderScale';
 import { Sim } from './sim';
 import { SfHud, type SfHudMeta } from './sf/sfHud';
 import { SfMusic } from './sf/music';
+import { WorkshopMusic, WorkshopStartAudio } from './courseRuntime';
 import { CompareGhosts } from './sf/ghosts';
 import { RunRecorder, type GhostRun } from './sf/ghostTrack';
 import { GhostSim } from './sf/ghostSim';
@@ -119,6 +120,9 @@ async function main(): Promise<void> {
     const bests = loadBests();
     /** Procedural soundtrack for the San Francisco course. */
     const sfMusic = new SfMusic();
+    const workshopMusic = new WorkshopMusic();
+    const workshopStartAudio = new WorkshopStartAudio();
+    let hasWorkshopMusic = false;
 
     const state0 = loadMenuState();
     renderer.setCourse(course.files.get('course.kcl')!, course.meta);
@@ -245,13 +249,16 @@ async function main(): Promise<void> {
         audio.setVolume(s.volume);
         audio.setMuted(s.muted);
         sfMusic.setVolume(s.muted ? 0 : s.volume * 0.8);
+        workshopMusic.setVolume(s.muted ? 0 : s.volume * 0.8);
         renderer.sf?.setStreetDetail(s.streetDetail);
     };
     applySettings(state0);
 
     const restart = () => {
         sfMusic.stop(0.1);
+        workshopMusic.stop();
         sim.start();
+        workshopStartAudio.playFanfare();
         sim.skipToCountdown();
         recorder.reset();
         liveTuned = false;
@@ -277,6 +284,8 @@ async function main(): Promise<void> {
         onStart: async (s) => {
             audio.unlock();
             sfMusic.unlock();
+            hasWorkshopMusic = await workshopMusic.load();
+            await workshopStartAudio.load();
             // The San Francisco scenery streams in after the menu shows: wait for it.
             const waitSf = async () => {
                 if (!renderer.sf) return;
@@ -568,12 +577,13 @@ async function main(): Promise<void> {
         recorder.push(sim.frame(), sim.kartPos(), sim.kartRot());
         showPickups();
         for (const ev of sim.events) {
-            audio.event(ev);
+            audio.event(ev, ev.type === 'countdown' ? workshopStartAudio.hasCountdownSound : ev.type === 'go' && hasWorkshopMusic);
+            if (ev.type === 'countdown') workshopStartAudio.playCountdown();
             if (ev.type === 'finish') onFinish();
             if (ev.type === 'itemBox') hud.pickupFlash(ev.stored);
             if (renderer.sf) {
-                if (ev.type === 'go') sfMusic.play();
-                else if (ev.type === 'finish') sfMusic.stop(2.5);
+                if (ev.type === 'go') { if (hasWorkshopMusic) workshopMusic.play(); else sfMusic.play(); }
+                else if (ev.type === 'finish') { sfMusic.stop(2.5); workshopMusic.stop(); }
             }
         }
         sim.events.length = 0;
@@ -607,8 +617,8 @@ async function main(): Promise<void> {
             }
         }
 
-        if (inMenu || paused) sfMusic.pause();
-        else sfMusic.resume();
+        if (inMenu || paused) { sfMusic.pause(); workshopMusic.pause(); }
+        else { sfMusic.resume(); workshopMusic.resume(); }
         if (inMenu || paused) {
             if (DEV_TOOLS && !inMenu && input.consumePress('Period')) stepOnce();
             acc = 0;
@@ -637,7 +647,7 @@ async function main(): Promise<void> {
             {
                 ...view.hud,
                 // San Francisco: FINISH! gives way to the results board (finishCamera).
-                countdown: sfHud && finishShot && simTime - finishShot.t0 > RESULTS_SEC ? null : view.hud.countdown,
+                countdown: sfHud && finishShot && simTime - finishShot.t0 > RESULTS_SEC ? null : workshopStartAudio.label(view.hud.countdown),
                 paused: paused && !inMenu,
                 debug: showDebug ? `${sim.debugText()}\n${renderer.scale.debugText()}` : null,
             },
