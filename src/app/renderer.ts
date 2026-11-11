@@ -257,7 +257,7 @@ export class Renderer {
             if (tireAsset) {
                 const model = await loadCustomModel(tireAsset);
                 if (version !== this.customLoadVersion) return;
-                for (let i = 0; i < 4; i++) {
+                for (let i = 0; i < this.rider.wheels.length; i++) {
                     const holder = new THREE.Group();
                     const wheel = model.root.clone(true);
                     applyTransform(wheel, transforms.tires);
