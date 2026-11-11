@@ -9,6 +9,12 @@ Choose one slot (Character, Kart body or Tires), then select the model and any c
 - **GLB**: recommended; a single file can contain meshes, materials, textures and animation clips.
 - **GLTF**: select the `.gltf` file plus its referenced `.bin` and texture files.
 - **FBX**: select the `.fbx` file plus its referenced texture files. Skeletal animation clips are shown when present.
+- **OBJ**: select the `.obj`, its `.mtl` material file (if present), and referenced textures.
+- **STL / PLY**: static geometry; vertex colors in PLY are supported.
+- **DAE (Collada)**: scene geometry, materials and available animation clips.
+- **3DS**: scene geometry and materials; select companion texture files.
+
+STL and PLY are geometry-only formats and use a default material when the file does not contain vertex colors. The additional static formats do not contain character animation.
 
 Choose the main model file in the dropdown and select **Load into studio**. Models are saved in the browser's IndexedDB library and restored on the next visit. Imported files stay in that browser; they are not uploaded to the repository or a server.
 
