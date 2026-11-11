@@ -4,7 +4,7 @@
  * are content hashes, so a file the CDN already has (a HEAD answers 200) is never uploaded again, and
  * everything is cached for a year, immutable. Upload before deploying the app that points at it.
  *
- * Usage: npx tsx tools/uploadData.ts [--apply] [--bucket sfkart-assets] [--prefix sf-kart] [--cdn https://cdn.freecode.sh]
+ * Usage: npx tsx tools/uploadData.ts [--apply] [--bucket growth-stunts] [--prefix sf-kart] [--cdn https://cdn.freecode.sh]
  * Without --apply it's a dry run: it lists what it would upload. Uploads with wrangler (logged in).
  */
 
@@ -18,7 +18,7 @@ const opt = (k: string, d: string) => {
     return i >= 0 && argv[i + 1] ? argv[i + 1]! : d;
 };
 const apply = argv.includes('--apply');
-const bucket = opt('bucket', 'sfkart-assets');
+const bucket = opt('bucket', 'growth-stunts');
 const prefix = opt('prefix', 'sf-kart').replace(/^\/+|\/+$/g, '');
 const cdn = opt('cdn', 'https://cdn.freecode.sh').replace(/\/+$/, '');
 const OUT = 'dist-data';

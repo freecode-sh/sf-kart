@@ -17,8 +17,9 @@
   "r2_buckets": [
     // Run files (inputs), for replays.
     { "binding": "RUNS", "bucket_name": "sfkart-runs" },
-    // The game's data (tools/uploadData.ts): the verifier's course and vehicles.
-    { "binding": "ASSETS", "bucket_name": "sfkart-assets" }
+    // The game's data (tools/uploadData.ts): the verifier's course and vehicles. growth-stunts holds every
+    // growth stunt's CDN data (sf-kart/, scratch-gpt2/, ...) behind cdn.freecode.sh.
+    { "binding": "ASSETS", "bucket_name": "growth-stunts" }
   ],
   "ratelimits": [{ "name": "SUBMIT_LIMIT", "namespace_id": "2001", "simple": { "limit": 6, "period": 60 } }],
   "vars": {
@@ -43,7 +44,7 @@
       ],
       "r2_buckets": [
         { "binding": "RUNS", "bucket_name": "sfkart-runs" },
-        { "binding": "ASSETS", "bucket_name": "sfkart-assets" }
+        { "binding": "ASSETS", "bucket_name": "growth-stunts" }
       ],
       "ratelimits": [{ "name": "SUBMIT_LIMIT", "namespace_id": "2002", "simple": { "limit": 6, "period": 60 } }],
       "vars": {
