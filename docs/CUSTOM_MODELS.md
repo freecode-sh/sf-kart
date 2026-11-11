@@ -22,7 +22,7 @@ Character animation clips can be selected, played, paused, looped, scrubbed and 
 
 ## Using custom visuals in races
 
-The race renderer loads the saved character, kart and tire assets from the same browser profile. Custom visuals replace the corresponding stock visual where supported. Tire meshes are placed at the physics engine's wheel centers.
+The race renderer loads the saved character, kart and tire assets from the same browser profile. A custom kart body replaces the stock vehicle body, and imported tire meshes replace the stock wheel visuals at the physics engine's wheel centers. A custom character is added as a character visual layer; for a clean character-on-custom-kart setup, import both a kart body and a character.
 
 The existing vehicle physics, collision, handling, wheel suspension and course simulation remain authoritative. Custom model imports are visual assets; they do not automatically create new physics hitboxes, wheel suspension settings or vehicle performance data. The character's first animation clip is used during a race when a custom character has animation clips; the Garage is where clips can be previewed and selected.
 
