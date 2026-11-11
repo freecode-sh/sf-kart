@@ -12,6 +12,7 @@ import { trickFlourish } from './sf/vehicleModel';
 import type { VehicleId } from './vehicles';
 import { RenderScale } from './renderScale';
 import { applyTransform, getCustomAsset, getCustomTransforms, loadCustomModel } from './customAssets';
+import { getWorkshopProject, mountWorkshopVisuals } from './courseRuntime';
 
 export interface CourseMeta {
     name?: string;
@@ -91,6 +92,10 @@ export class Renderer {
     private customAnimationTime = 0;
     private customLoadVersion = 0;
     private customTires = false;
+    /** Decorative models and skybox from the local Course Workshop project. */
+    private workshopGroup = new THREE.Group();
+    private workshopSkybox: THREE.Texture | null = null;
+    private workshopLoadVersion = 0;
 
     constructor(private readonly canvas: HTMLCanvasElement) {
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -140,16 +145,38 @@ export class Renderer {
     /** Replaces the drawn course: the San Francisco scene (src/app/sf) draws its own road, terrain, city and sky. */
     setCourse(kcl: Uint8Array, meta: CourseMeta | null): void {
         this.courseGroup.clear();
+        this.workshopGroup.clear();
         this.sf?.dispose();
         this.sf = null;
         this.scene.environment = null;
         this.camera.far = 3_000_000;
         this.camera.updateProjectionMatrix();
+        this.scene.add(this.workshopGroup);
+        void this.loadWorkshopCourse();
         if (!meta) return;
         this.sf = new SfScene(meta as unknown as RoadMeta, this.renderer, this.scene, { sun: this.sun, hemi: this.hemi }, kcl);
         this.courseGroup.add(this.sf.group);
         // (Its dash panels are drawn by the course too: src/app/sf/dashPanels.ts.)
         if (meta.start) this.addStartLine(meta);
+    }
+
+    private async loadWorkshopCourse(): Promise<void> {
+        const version = ++this.workshopLoadVersion;
+        try {
+            const project = await getWorkshopProject();
+            if (version !== this.workshopLoadVersion || !project) return;
+            this.workshopGroup.clear();
+            const texture = await mountWorkshopVisuals(project, this.workshopGroup);
+            if (version !== this.workshopLoadVersion) { texture?.dispose(); return; }
+            if (texture) {
+                this.workshopSkybox?.dispose();
+                this.workshopSkybox = texture;
+                this.scene.background = texture;
+                this.scene.environment = texture;
+            }
+        } catch (error) {
+            console.warn('Could not load Course Workshop visuals; using the stock course scene.', error);
+        }
     }
 
     /** Checkered start/finish line. */
