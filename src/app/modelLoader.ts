@@ -46,7 +46,10 @@ export async function loadModelFile(main: ModelFile, files: ModelFile[], manager
     }
     if (ext === 'dae') {
         const collada = new ColladaLoader(manager).parse(text(main.buffer), basePath);
-        return { root: collada.scene, animations: collada.animations ?? [] };
+        if (!collada) throw new Error('The Collada file could not be parsed.');
+        const root = new THREE.Group();
+        root.add(collada.scene);
+        return { root, animations: [] };
     }
     if (ext === '3ds') {
         return { root: new TDSLoader(manager).parse(main.buffer.slice(0), basePath), animations: [] };
