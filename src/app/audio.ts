@@ -207,14 +207,14 @@ export class AudioEngine {
         this.boostFilter.frequency.setTargetAtTime(f.boosting ? 2600 : 600, t, 0.1);
     }
 
-    event(e: SimEvent): void {
+    event(e: SimEvent, suppressStartSound = false): void {
         if (!this.ctx || this.ctx.state !== 'running') return;
         switch (e.type) {
             case 'countdown':
-                this.beep(440, 0.16, 0.35);
+                if (!suppressStartSound) this.beep(440, 0.16, 0.35);
                 break;
             case 'go':
-                this.beep(880, 0.55, 0.4);
+                if (!suppressStartSound) this.beep(880, 0.55, 0.4);
                 break;
             case 'hop':
                 if (this.voice === 'ebike') this.bell();
