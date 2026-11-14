@@ -176,6 +176,9 @@ async function postRun(req: Request, user: User, env: Env): Promise<Response> {
     if (player.banned) throw new HttpError(403, 'banned', 'This account can’t post times');
     if (!(await env.SUBMIT_LIMIT.limit({ key: user.id })).success) throw new HttpError(429, 'slow_down', 'Too many runs at once: try again in a minute');
 
+    // Refuse a large body before buffering it, not after.
+    const declared = Number(req.headers.get('content-length') ?? '');
+    if (Number.isFinite(declared) && declared > MAX_BODY) throw new HttpError(413, 'too_big');
     const bytes = new Uint8Array(await req.arrayBuffer());
     if (bytes.length > MAX_BODY) throw new HttpError(413, 'too_big');
     const run = await decodeRun(bytes).catch(() => {
@@ -253,7 +256,7 @@ function runKey(env: Env, id: string): string {
 // ---- admin -------------------------------------------------------------------------------------
 
 async function admin(req: Request, url: URL, env: Env): Promise<Response> {
-    if (!env.ADMIN_KEY || req.headers.get('Authorization') !== `Bearer ${env.ADMIN_KEY}`) throw new HttpError(401, 'unauthorized');
+    if (!env.ADMIN_KEY || !timingSafeEqual(req.headers.get('Authorization'), `Bearer ${env.ADMIN_KEY}`)) throw new HttpError(401, 'unauthorized');
     const name = url.searchParams.get('name') ?? '';
     const banned = url.pathname === '/admin/ban' ? 1 : url.pathname === '/admin/unban' ? 0 : -1;
     if (banned < 0) throw new HttpError(404, 'not_found');
@@ -264,6 +267,16 @@ async function admin(req: Request, url: URL, env: Env): Promise<Response> {
 }
 
 // ---- helpers -----------------------------------------------------------------------------------
+
+/** Two strings equal without leaking where they first differ. The admin key can ban anyone. */
+function timingSafeEqual(got: string | null, want: string): boolean {
+    const a = new TextEncoder().encode(got ?? '');
+    const b = new TextEncoder().encode(want);
+    // Length mismatch still walks the short side, so only the length is revealed.
+    let diff = a.byteLength ^ b.byteLength;
+    for (let i = 0; i < Math.min(a.byteLength, b.byteLength); i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+    return diff === 0;
+}
 
 async function purgeBoards(req: Request, env: Env, which: readonly Board[]): Promise<void> {
     const cache = (caches as unknown as { default: Cache }).default;
